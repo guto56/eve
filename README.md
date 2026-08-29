@@ -4,9 +4,22 @@ Assistente pessoal de IA local-first para macOS.
 
 Estado: **Fase 8 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra e tem interface web. Veja [docs/PLANO.md](docs/PLANO.md).
 
+## Instalação
+
+Enquanto o instalador de um comando só não chega (Fase 13):
+
+```bash
+uv tool install --editable .
+```
+
+Isso põe `eve` no PATH (`~/.local/bin/eve`), apontando para este diretório —
+mudanças no código valem na hora, sem reinstalar.
+
 ```bash
 eve start && eve web
 ```
+
+Sem instalar, tudo funciona com `uv run eve ...` de dentro do projeto.
 
 ## Interface
 
