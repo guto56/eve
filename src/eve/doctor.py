@@ -295,17 +295,19 @@ def check_web_access(_: Settings) -> Check:
     else:
         faltando.append("TAVILY_API_KEY")
 
+    # Perguntar o caminho ao Playwright subiria o processo do driver só para
+    # um diagnóstico — e ele deixa tarefa pendente no encerramento, poluindo a
+    # saída. Olhar o cache é suficiente e não custa nada.
     try:
-        from playwright.sync_api import sync_playwright
-
-        with sync_playwright() as p:
-            caminho = p.chromium.executable_path
-        if caminho and Path(caminho).exists():
+        import playwright  # noqa: F401
+    except ImportError:
+        faltando.append("Playwright")
+    else:
+        cache = Path.home() / "Library" / "Caches" / "ms-playwright"
+        if any(cache.glob("chromium*")):
             partes.append("navegador")
         else:
             faltando.append("Chromium (rode `playwright install chromium`)")
-    except Exception:
-        faltando.append("Playwright")
 
     if faltando:
         detalhe = f"falta {', '.join(faltando)}"
