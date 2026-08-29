@@ -16,6 +16,14 @@ from pydantic import BaseModel, Field
 class EventType:
     """Tipos conhecidos. O barramento aceita qualquer string pontuada."""
 
+    # observadores (spec §28)
+    FILE_CHANGED = "file.changed"
+    GIT_CHANGED = "git.changed"
+    APP_OPENED = "app.opened"
+    APP_CLOSED = "app.closed"
+    USER_IDLE = "user.idle"
+    USER_BACK = "user.back"
+
     # ciclo de vida do sistema
     SYSTEM_STARTED = "system.started"
     SYSTEM_STOPPING = "system.stopping"

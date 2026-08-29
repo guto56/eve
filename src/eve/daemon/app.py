@@ -11,6 +11,7 @@ import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI
@@ -29,6 +30,7 @@ from eve.daemon.routes import (
     extensions,
     health,
     memory,
+    proactive,
     tasks,
     tools,
     voice,
@@ -44,6 +46,8 @@ from eve.memory.manager import MemoryManager
 from eve.memory.store import MemoryStore
 from eve.paths import paths
 from eve.permissions import PermissionEngine
+from eve.proactive.engine import ProactiveEngine
+from eve.proactive.policy import Policy
 from eve.router.router import Router
 from eve.secrets import build_store
 from eve.skills.manager import SkillManager
@@ -56,6 +60,7 @@ from eve.tools.memory_tools import register_memory_tools
 from eve.tools.registry import ToolRegistry
 from eve.tools.spec import RiskLevel
 from eve.tools.web_tools import register_web_tools
+from eve.watch.manager import WatchManager
 from eve.websearch.tavily import TavilySearch
 
 log = get_logger(__name__)
@@ -71,6 +76,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         app.state.skills.connect_enabled(_standalone_servers(app.state.settings))
     )
 
+    await app.state.proactive.start()
+    await _start_watchers(app)
+
     await bus.emit(EventType.SYSTEM_STARTED, version=__version__, pid=os.getpid())
     log.info(
         "core.started", version=__version__, pid=os.getpid(), tools=len(app.state.tools.registry)
@@ -80,6 +88,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         conexoes.cancel()
         await asyncio.gather(conexoes, return_exceptions=True)
+        await app.state.watch.aclose()
+        await app.state.proactive.stop()
         await app.state.tasks.aclose()
         await app.state.mcp.aclose()
         await app.state.browser.close()
@@ -132,6 +142,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.providers,
         extra_namespaces=app.state.skills.namespaces_for,
     )
+    app.state.watch = WatchManager(app.state.bus)
+    app.state.proactive = ProactiveEngine(app.state.bus, app.state.tools, _build_policy(settings))
     app.state.tasks = TaskManager()
     app.state.agent = AgentRunner(app.state.providers, app.state.tools, app.state.bus)
     app.state.chat = ChatEngine(
@@ -153,6 +165,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(voice.router)
     app.include_router(extensions.router)
     app.include_router(tasks.router)
+    app.include_router(proactive.router)
     # A interface é montada por último: sua rota curinga não pode capturar
     # nada da API.
     web.mount(app)
@@ -190,6 +203,31 @@ def build_tool_bus(
         approvals=ApprovalBroker(settings.permissions.confirm_timeout),
         services=dict(services or {}),
     )
+
+
+def _build_policy(settings: Settings) -> Policy:
+    proativo = settings.proactive
+    horas = proativo.quiet_hours
+    return Policy(
+        rules=dict(proativo.rules),
+        quiet_hours=(horas[0], horas[1]) if horas and len(horas) == 2 else None,
+        min_interval=proativo.min_interval,
+        enabled=proativo.enabled,
+    )
+
+
+async def _start_watchers(app: FastAPI) -> None:
+    """Sobe os observadores configurados, sem deixar um travar os outros."""
+    settings: Settings = app.state.settings
+    for item in settings.watch:
+        if not item.enabled:
+            continue
+        try:
+            await app.state.watch.add_path(item.name, Path(item.path))
+        except Exception as exc:
+            log.warning("observador.nao_subiu", nome=item.name, error=str(exc)[:160])
+    if settings.proactive.watch_apps:
+        await app.state.watch.add_apps()
 
 
 def _build_search(secrets: Any) -> TavilySearch | None:

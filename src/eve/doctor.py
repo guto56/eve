@@ -317,6 +317,20 @@ def check_web_access(_: Settings) -> Check:
     return Check("Web e navegador", Status.OK, " e ".join(partes))
 
 
+def check_proactive(settings: Settings) -> Check:
+    """Observadores e política de interrupção."""
+    if not settings.proactive.enabled:
+        return Check("Proatividade", Status.OK, "desligada")
+    caminhos = [w for w in settings.watch if w.enabled]
+    faltando = [w.name for w in caminhos if not Path(w.path).expanduser().exists()]
+    detalhe = f"{len(caminhos)} caminho(s) observado(s)"
+    if settings.proactive.rules:
+        detalhe += f", {len(settings.proactive.rules)} regra(s)"
+    if faltando:
+        return Check("Proatividade", Status.WARN, f"{detalhe}; sumiu: {', '.join(faltando)}")
+    return Check("Proatividade", Status.OK, detalhe)
+
+
 def check_voice(_: Settings) -> Check:
     from eve.secrets import build_store
 
@@ -389,6 +403,7 @@ CHECKS: list[CheckFn] = [
     check_providers,
     check_memory_store,
     check_voice,
+    check_proactive,
     check_web_access,
     check_extensions,
     check_web,

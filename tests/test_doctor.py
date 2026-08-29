@@ -51,7 +51,7 @@ def test_port_check_reports_free_port(settings: Settings) -> None:
 
 def test_run_checks_returns_every_check(settings: Settings) -> None:
     results = run_checks(settings)
-    assert len(results) == 17
+    assert len(results) == 18
     assert {"Python", "Core", "Porta", "Configuração"} <= {c.name for c in results}
 
 

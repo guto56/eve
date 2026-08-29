@@ -75,6 +75,10 @@ async def status(request: Request) -> dict[str, Any]:
             "total": await app.state.memory.store.count(),
             "semantic_search": app.state.memory.store.vectors.available,
         },
+        "proactive": {
+            **app.state.proactive.describe(),
+            "observers": app.state.watch.running,
+        },
         "tasks": {
             "total": len(app.state.tasks),
             "active": len(app.state.tasks.active),

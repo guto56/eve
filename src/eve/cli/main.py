@@ -26,6 +26,7 @@ from eve.cli.memory_cmd import memory_app
 from eve.cli.task_cmd import task_app
 from eve.cli.tools_cmd import permission_app, tool_app
 from eve.cli.voice_cmd import voice_app
+from eve.cli.watch_cmd import watch_app
 from eve.config import load_settings
 from eve.doctor import Status, run_checks, worst
 from eve.paths import paths
@@ -50,6 +51,7 @@ app.add_typer(voice_app)
 app.add_typer(skill_app)
 app.add_typer(mcp_app)
 app.add_typer(task_app)
+app.add_typer(watch_app)
 app.command(name="ask")(ask)
 app.command(name="chat")(chat_cmd)
 

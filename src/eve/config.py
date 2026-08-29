@@ -84,6 +84,26 @@ class VoiceSettings(BaseModel):
     """Interromper a fala da EVE quando o usuário começa a falar."""
 
 
+class WatchSettings(BaseModel):
+    """Um caminho observado (spec §30)."""
+
+    name: str
+    path: str
+    enabled: bool = True
+
+
+class ProactiveSettings(BaseModel):
+    """Quando a EVE pode tomar a iniciativa (spec §29, §33)."""
+
+    enabled: bool = True
+    watch_apps: bool = False
+    """Observar aplicativos abrindo e fechando. Desligado por padrão: é muito
+    evento para pouca utilidade até existir uma regra que use isso."""
+    rules: dict[str, str] = Field(default_factory=dict)
+    quiet_hours: list[int] | None = None
+    min_interval: float = Field(default=60.0, ge=0)
+
+
 class MCPServerSettings(BaseModel):
     """Servidor MCP avulso, fora de qualquer Skill (spec §20)."""
 
@@ -129,6 +149,8 @@ class Settings(BaseSettings):
     memory: MemorySettings = MemorySettings()
     voice: VoiceSettings = VoiceSettings()
     mcp: list[MCPServerSettings] = Field(default_factory=list)
+    proactive: ProactiveSettings = ProactiveSettings()
+    watch: list[WatchSettings] = Field(default_factory=list)
 
     @classmethod
     def settings_customise_sources(
