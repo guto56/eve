@@ -203,3 +203,26 @@ async def test_router_event_does_not_collide_with_the_event_source(
         evento = sub.queue.get_nowait()
     assert evento.source == "api"
     assert evento.payload["decided_by"] == "rule"
+
+
+async def test_explicit_memory_turn_does_not_trigger_extraction(
+    engine: ChatEngine, tool_bus: ToolBus
+) -> None:
+    """Regressão: o caminho rápido gravava, e a extração gravava de novo,
+    reescrito — perto demais para ser útil, longe demais para o deduplicador."""
+    from unittest.mock import AsyncMock
+
+    from eve.tools.memory_tools import register_memory_tools
+
+    register_memory_tools(tool_bus.registry)
+    memoria = AsyncMock()
+    memoria.context_for = AsyncMock(return_value="")
+    memoria.remember = AsyncMock(return_value=(None, "nova"))
+    tool_bus.services["memory"] = memoria
+    engine.memory = memoria
+
+    await collect(engine, "lembre que eu prefiro reuniões de manhã")
+    await engine.drain()
+
+    memoria.remember.assert_awaited()
+    memoria.extract.assert_not_awaited()

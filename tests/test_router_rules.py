@@ -79,8 +79,6 @@ def test_url_wins_over_app_when_the_target_looks_like_an_address() -> None:
         ("obrigado!", Route.CHAT),
         ("pesquise sobre o novo macOS", Route.WEB),
         ("quais as notícias de hoje", Route.WEB),
-        ("lembre que eu prefiro café sem açúcar", Route.MEMORY),
-        ("o que eu te disse ontem", Route.MEMORY),
     ],
 )
 def test_rules_that_only_pick_a_route(texto: str, rota: Route) -> None:
@@ -122,3 +120,31 @@ def test_out_of_range_volume_declines() -> None:
 
 def test_absurdly_long_target_declines() -> None:
     assert apply_rules("abra o " + "x" * 200) is None
+
+
+@pytest.mark.parametrize(
+    ("texto", "tool", "args"),
+    [
+        (
+            "lembre que eu prefiro reuniões de manhã",
+            "memory.remember",
+            {"content": "eu prefiro reuniões de manhã"},
+        ),
+        (
+            "memorize que o projeto usa Python 3.13",
+            "memory.remember",
+            {"content": "o projeto usa Python 3.13"},
+        ),
+        ("o que eu te disse sobre o Módulo de Voz", "memory.recall", {"query": "o Módulo de Voz"}),
+    ],
+)
+def test_memory_rules_preserve_the_original_text(texto: str, tool: str, args: dict) -> None:
+    """A regra casa contra o texto sem acento, mas guarda o que foi escrito."""
+    hit = apply_rules(texto)
+    assert hit is not None
+    assert hit.tool == tool
+    assert hit.arguments == args
+
+
+def test_memory_rule_declines_when_there_is_no_fact() -> None:
+    assert apply_rules("lembre disso") is None

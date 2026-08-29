@@ -42,7 +42,7 @@ def test_doctor_json_is_machine_readable(monkeypatch) -> None:
     result = runner.invoke(app, ["doctor", "--json"])
     data = json.loads(result.output)
     assert data["overall"] in {"ok", "warn", "fail"}
-    assert len(data["checks"]) == 12
+    assert len(data["checks"]) == 13
 
 
 def test_stop_when_not_running() -> None:

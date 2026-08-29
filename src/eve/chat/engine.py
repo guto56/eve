@@ -16,6 +16,7 @@ Skills veem o mesmo fluxo sem que o motor saiba quem está olhando.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from collections.abc import AsyncIterator, Sequence
@@ -39,6 +40,7 @@ from eve.chat.session import ChatSession, SessionStore
 from eve.events import EventType
 from eve.logging import get_logger
 from eve.router.router import Router, RoutingDecision
+from eve.router.routes import Route
 from eve.tools.bus import ToolBus
 from eve.tools.spec import ToolResult
 
@@ -65,6 +67,7 @@ class ChatEngine:
         bus: EventBus,
         sessions: SessionStore | None = None,
         max_rounds: int = MAX_TOOL_ROUNDS,
+        memory: Any = None,
     ) -> None:
         self.router = router
         self.providers = providers
@@ -72,6 +75,8 @@ class ChatEngine:
         self.bus = bus
         self.sessions = sessions or SessionStore()
         self.max_rounds = max_rounds
+        self.memory = memory
+        self._extracoes: set[asyncio.Task[Any]] = set()
 
     async def send(
         self,
@@ -111,6 +116,8 @@ class ChatEngine:
             yield await self._fail(session, source, str(exc), type(exc).__name__)
             return
 
+        self._schedule_extraction(session, decision)
+
         elapsed = (time.perf_counter() - started) * 1000
         await self.bus.emit(
             EventType.MESSAGE_COMPLETED,
@@ -119,6 +126,48 @@ class ChatEngine:
             duration_ms=round(elapsed, 2),
         )
         yield ChatEvent("done", {"session": session.id, "duration_ms": round(elapsed, 2)})
+
+    async def _memory_context(self, text: str) -> str:
+        if self.memory is None:
+            return ""
+        limite = self.tools.settings.memory.context_limit
+        if limite <= 0:
+            return ""
+        try:
+            return await self.memory.context_for(text, limit=limite)
+        except Exception as exc:
+            log.warning("chat.memoria_indisponivel", error=str(exc))
+            return ""
+
+    def _schedule_extraction(self, session: ChatSession, decision: RoutingDecision) -> None:
+        """Extrai memórias em segundo plano: não pode atrasar a resposta."""
+        if self.memory is None or not self.tools.settings.memory.auto_extract:
+            return
+        if len(session.messages) < 2:
+            return
+        if decision.route is Route.MEMORY:
+            # O usuário já disse o que queria guardar e a EVE guardou. Extrair
+            # de novo geraria uma segunda cópia do mesmo fato, reescrita —
+            # parecida demais para ser útil, diferente demais para o
+            # deduplicador reconhecer.
+            return
+        tarefa = asyncio.create_task(self._extract(session))
+        self._extracoes.add(tarefa)
+        tarefa.add_done_callback(self._extracoes.discard)
+
+    async def _extract(self, session: ChatSession) -> None:
+        try:
+            gravadas = await self.memory.extract(session.history(limit=6), session.id)
+        except Exception as exc:
+            log.warning("chat.extracao_falhou", error=str(exc))
+            return
+        if gravadas:
+            log.info("memoria.extraidas", count=len(gravadas), session=session.id)
+
+    async def drain(self) -> None:
+        """Espera as extrações pendentes. Usado no encerramento e nos testes."""
+        if self._extracoes:
+            await asyncio.gather(*list(self._extracoes), return_exceptions=True)
 
     async def _fail(self, session: ChatSession, source: str, error: str, kind: str) -> ChatEvent:
         await self.bus.emit(
@@ -188,8 +237,11 @@ class ChatEngine:
         model = self.providers.model_for(decision.role)  # type: ignore[arg-type]
         wire_tools = self.tools.registry.wire_tools(decision.tools) if decision.tools else []
 
+        # Contexto de memória entra aqui, não no histórico: é conhecimento
+        # sobre o usuário, não algo que alguém disse nesta conversa.
+        lembrado = await self._memory_context(text)
         messages: list[Message] = [
-            system(system_prompt(with_tools=bool(wire_tools))),
+            system(system_prompt(with_tools=bool(wire_tools), extra=lembrado)),
             *session.history(),
         ]
         ultimo: tuple[ToolCall, ToolResult] | None = None

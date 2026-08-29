@@ -87,6 +87,32 @@ def _listagem(args: dict[str, Any], value: Any) -> str:
     return f"{value['count']} item(ns) em {value['path']}: {_lista(nomes)}{resto}."
 
 
+def _memoria_gravada(_: dict[str, Any], value: Any) -> str:
+    estado = value.get("estado")
+    if estado == "reforçada":
+        return "Isso eu já sabia — reforcei na memória."
+    if estado == "descartada":
+        return "Não guardei: pareceu pouco relevante."
+    return f"Guardado: {value['content']}"
+
+
+def _memoria_lembrada(_: dict[str, Any], value: Any) -> str:
+    achadas = value.get("encontradas") or value.get("memorias") or []
+    if not achadas:
+        return "Não encontrei nada sobre isso na memória."
+    if len(achadas) == 1:
+        return achadas[0]["content"]
+    linhas = "\n".join(f"- {m['content']}" for m in achadas)
+    return f"O que eu lembro:\n{linhas}"
+
+
+def _memoria_esquecida(_: dict[str, Any], value: Any) -> str:
+    count = value.get("count", 0)
+    if not count:
+        return "Não achei nada para esquecer."
+    return f"Esqueci {count} memória(s)."
+
+
 def _template(texto: str) -> Formatter:
     def formatter(args: dict[str, Any], value: Any) -> str:
         dados = {**args, **(value if isinstance(value, dict) else {})}
@@ -119,6 +145,10 @@ FORMATTERS: dict[str, Formatter] = {
     "clipboard.read": _clipboard,
     "system.info": _info,
     "file.list": _listagem,
+    "memory.remember": _memoria_gravada,
+    "memory.recall": _memoria_lembrada,
+    "memory.list": _memoria_lembrada,
+    "memory.forget": _memoria_esquecida,
 }
 
 PHRASE_SYSTEM = """Você transforma o resultado de uma ferramenta em UMA frase curta

@@ -1,0 +1,126 @@
+"""Banco da memória: SQLite com FTS5 e sqlite-vec (spec §18).
+
+Local por padrão, num arquivo só, sem servidor — é o que permite prometer que
+nada sai da máquina sem o usuário mandar.
+"""
+
+from __future__ import annotations
+
+import sqlite3
+from pathlib import Path
+
+from eve.logging import get_logger
+
+log = get_logger(__name__)
+
+SCHEMA_VERSION = 1
+
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS memories (
+    rowid       INTEGER PRIMARY KEY AUTOINCREMENT,
+    uid         TEXT    NOT NULL UNIQUE,
+    content     TEXT    NOT NULL,
+    kind        TEXT    NOT NULL,
+    importance  REAL    NOT NULL DEFAULT 0.5,
+    confidence  REAL    NOT NULL DEFAULT 0.8,
+    source      TEXT    NOT NULL DEFAULT 'user',
+    session     TEXT,
+    context     TEXT    NOT NULL DEFAULT '{}',
+    created_at  REAL    NOT NULL,
+    updated_at  REAL    NOT NULL,
+    last_used_at REAL,
+    use_count   INTEGER NOT NULL DEFAULT 0,
+    expires_at  REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_memories_kind ON memories(kind);
+CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at);
+CREATE INDEX IF NOT EXISTS idx_memories_updated ON memories(updated_at DESC);
+
+-- Busca textual. `content=''` mantém o índice externo à tabela, e a
+-- sincronia fica a cargo dos gatilhos abaixo.
+CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
+    content,
+    content='memories',
+    content_rowid='rowid',
+    tokenize='unicode61 remove_diacritics 2'
+);
+
+CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
+    INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, content)
+        VALUES ('delete', old.rowid, old.content);
+END;
+
+CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
+    INSERT INTO memories_fts(memories_fts, rowid, content)
+        VALUES ('delete', old.rowid, old.content);
+    INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
+END;
+
+CREATE TABLE IF NOT EXISTS memory_links (
+    from_uid  TEXT NOT NULL,
+    to_uid    TEXT NOT NULL,
+    relation  TEXT NOT NULL DEFAULT 'relacionada',
+    PRIMARY KEY (from_uid, to_uid, relation)
+);
+
+CREATE TABLE IF NOT EXISTS meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL);
+"""
+
+
+class VectorSupport:
+    """Estado do sqlite-vec nesta instalação."""
+
+    def __init__(self, available: bool, reason: str = "", dimensions: int = 0) -> None:
+        self.available = available
+        self.reason = reason
+        self.dimensions = dimensions
+
+
+def connect(path: Path, dimensions: int = 768) -> tuple[sqlite3.Connection, VectorSupport]:
+    """Abre (ou cria) o banco, aplica o esquema e tenta carregar o sqlite-vec.
+
+    Sem o sqlite-vec a memória continua funcionando: perde a busca semântica,
+    mantém a textual. Degradar é melhor que não abrir.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA synchronous=NORMAL")
+    conn.execute("PRAGMA foreign_keys=ON")
+    conn.executescript(SCHEMA)
+
+    vectors = _load_vectors(conn, dimensions)
+    conn.execute(
+        "INSERT OR REPLACE INTO meta(chave, valor) VALUES ('schema_version', ?)",
+        (str(SCHEMA_VERSION),),
+    )
+    conn.commit()
+    return conn, vectors
+
+
+def _load_vectors(conn: sqlite3.Connection, dimensions: int) -> VectorSupport:
+    try:
+        import sqlite_vec
+
+        conn.enable_load_extension(True)
+        sqlite_vec.load(conn)
+        conn.enable_load_extension(False)
+    except Exception as exc:
+        log.warning("memoria.sem_busca_vetorial", error=str(exc))
+        return VectorSupport(False, str(exc))
+
+    # Cosseno em vez de L2: a distância fica entre 0 e 2 e comparável entre
+    # consultas, o que permite um limiar de relevância que significa algo.
+    conn.execute(
+        f"CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0("
+        f"rowid INTEGER PRIMARY KEY, "
+        f"embedding float[{dimensions}] distance_metric=cosine)"
+    )
+    versao = conn.execute("SELECT vec_version()").fetchone()[0]
+    return VectorSupport(True, f"sqlite-vec {versao}", dimensions)

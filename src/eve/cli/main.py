@@ -21,6 +21,7 @@ from eve import __version__
 from eve.cli import process
 from eve.cli.ai_cmd import ask, key_app, provider_app
 from eve.cli.chat_cmd import chat as chat_cmd
+from eve.cli.memory_cmd import memory_app
 from eve.cli.tools_cmd import permission_app, tool_app
 from eve.config import load_settings
 from eve.doctor import Status, run_checks, worst
@@ -41,6 +42,7 @@ app.add_typer(tool_app)
 app.add_typer(permission_app)
 app.add_typer(key_app)
 app.add_typer(provider_app)
+app.add_typer(memory_app)
 app.command(name="ask")(ask)
 app.command(name="chat")(chat_cmd)
 

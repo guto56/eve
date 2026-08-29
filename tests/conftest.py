@@ -116,9 +116,8 @@ def secret_store(tmp_path: Path):
 @pytest.fixture
 def fake_providers(settings, secret_store):
     """ProviderManager cujo provedor local é falso e roteirizável."""
-    from tests.fakes import FakeProvider
-
     from eve.ai.manager import ProviderManager
+    from tests.fakes import FakeProvider
 
     manager = ProviderManager(settings, secret_store)
     fake = FakeProvider()
@@ -131,6 +130,7 @@ def fake_providers(settings, secret_store):
 def full_registry():
     from eve.tools.builtin import register_builtin_tools
     from eve.tools.macos_tools import register_macos_tools
+    from eve.tools.memory_tools import register_memory_tools
     from eve.tools.registry import ToolRegistry
 
-    return register_macos_tools(register_builtin_tools(ToolRegistry()))
+    return register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))

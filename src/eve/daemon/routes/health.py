@@ -54,6 +54,10 @@ async def status(request: Request) -> dict[str, Any]:
                 "ativo" if app.state.secrets.has("OPENROUTER_API_KEY") else "sem credencial"
             ),
         },
+        "memory": {
+            "total": await app.state.memory.store.count(),
+            "semantic_search": app.state.memory.store.vectors.available,
+        },
         "chat": {
             "sessions": len(app.state.chat.sessions),
             "max_tool_rounds": app.state.chat.max_rounds,

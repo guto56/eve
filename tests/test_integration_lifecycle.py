@@ -94,7 +94,7 @@ def test_restart_replaces_the_process(running_daemon: int) -> None:
 def test_tool_list_and_call_through_the_cli(running_daemon: int) -> None:
     listed = runner.invoke(app, ["tool", "list", "--json"])
     assert listed.exit_code == 0
-    assert json.loads(listed.output)["count"] == 23
+    assert json.loads(listed.output)["count"] == 27
 
     called = runner.invoke(app, ["tool", "call", "eve.echo", "-a", '{"message": "olá"}'])
     assert called.exit_code == 0, called.output

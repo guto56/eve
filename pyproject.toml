@@ -16,6 +16,7 @@ dependencies = [
     "pyobjc-framework-cocoa>=12.2.2",
     "pyobjc-framework-applicationservices>=12.2.2",
     "keyring>=25.7.0",
+    "sqlite-vec>=0.1.9",
 ]
 
 [project.scripts]

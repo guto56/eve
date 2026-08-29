@@ -130,9 +130,10 @@ def check_tools(settings: Settings) -> Check:
     from eve.permissions import PermissionEngine
     from eve.tools.builtin import register_builtin_tools
     from eve.tools.macos_tools import register_macos_tools
+    from eve.tools.memory_tools import register_memory_tools
     from eve.tools.registry import ToolRegistry
 
-    registry = register_macos_tools(register_builtin_tools(ToolRegistry()))
+    registry = register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
     engine = PermissionEngine(
         overrides=parse_overrides(settings.permissions.overrides),
         grants=dict(settings.permissions.grants),
@@ -216,6 +217,39 @@ def check_providers(settings: Settings) -> Check:
     return Check("Provedores de IA", Status.OK, ", ".join(ok))
 
 
+def check_memory_store(settings: Settings) -> Check:
+    import asyncio
+
+    from eve.memory.embeddings import Embedder
+    from eve.memory.store import MemoryStore
+
+    async def run() -> tuple[dict, bool]:
+        store = MemoryStore(paths().ensure().db_file, settings.memory.embedding_dimensions)
+        embedder = Embedder(host=settings.ai.ollama_host, model=settings.memory.embedding_model)
+        try:
+            return await store.stats(), await embedder.available()
+        finally:
+            await embedder.aclose()
+            await store.aclose()
+
+    try:
+        stats, tem_embedder = asyncio.run(run())
+    except Exception as exc:
+        return Check("Memória da EVE", Status.FAIL, f"não abriu: {exc}")
+
+    detalhe = f"{stats['total']} memória(s), {stats['bytes'] / 1024:.0f} KB"
+    if not stats["busca_semantica"]:
+        return Check("Memória da EVE", Status.WARN, f"{detalhe}; sem sqlite-vec — só busca textual")
+    if not tem_embedder:
+        return Check(
+            "Memória da EVE",
+            Status.WARN,
+            f"{detalhe}; falta o modelo {settings.memory.embedding_model} "
+            f"(ollama pull {settings.memory.embedding_model})",
+        )
+    return Check("Memória da EVE", Status.OK, f"{detalhe}, busca híbrida ativa")
+
+
 def check_disk(_: Settings) -> Check:
     usage = shutil.disk_usage(paths().home.parent)
     free_gb = usage.free / 1024**3
@@ -226,7 +260,7 @@ def check_disk(_: Settings) -> Check:
     return Check("Disco", Status.OK, f"{free_gb:.1f} GB livres")
 
 
-def check_memory(_: Settings) -> Check:
+def check_ram(_: Settings) -> Check:
     try:
         total = int(
             subprocess.run(
@@ -238,18 +272,18 @@ def check_memory(_: Settings) -> Check:
             ).stdout.strip()
         )
     except (OSError, subprocess.SubprocessError, ValueError):
-        return Check("Memória", Status.WARN, "não foi possível medir")
+        return Check("RAM", Status.WARN, "não foi possível medir")
     gb = total / 1024**3
     if gb < 8:
-        return Check("Memória", Status.FAIL, f"{gb:.0f} GB — abaixo do mínimo")
+        return Check("RAM", Status.FAIL, f"{gb:.0f} GB — abaixo do mínimo")
     if gb <= 8:
-        return Check("Memória", Status.WARN, f"{gb:.0f} GB — use apenas modelos locais até 3B")
-    return Check("Memória", Status.OK, f"{gb:.0f} GB")
+        return Check("RAM", Status.WARN, f"{gb:.0f} GB — use apenas modelos locais até 3B")
+    return Check("RAM", Status.OK, f"{gb:.0f} GB")
 
 
 CHECKS: list[CheckFn] = [
     check_python,
-    check_memory,
+    check_ram,
     check_disk,
     check_home,
     check_config,
@@ -259,6 +293,7 @@ CHECKS: list[CheckFn] = [
     check_macos_permissions,
     check_secrets,
     check_providers,
+    check_memory_store,
     check_ollama,
 ]
 

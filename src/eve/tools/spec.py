@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 import uuid
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, Any
@@ -70,6 +70,17 @@ class ToolContext:
     settings: Settings
     bus: EventBus
     caller: str = "user"
+    services: Mapping[str, Any] = field(default_factory=dict)
+    """Serviços do Core que a ferramenta pode usar (``memory``, etc.).
+
+    Passar por aqui em vez de importar direto mantém a ferramenta testável e
+    evita que ela alcance qualquer parte do sistema."""
+
+    def service(self, name: str) -> Any:
+        servico = self.services.get(name)
+        if servico is None:
+            raise RuntimeError(f"serviço indisponível: {name}")
+        return servico
 
 
 @dataclass(frozen=True)

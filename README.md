@@ -2,7 +2,7 @@
 
 Assistente pessoal de IA local-first para macOS.
 
-Estado: **Fase 5 concluída** — a EVE conversa, roteia intenção em 0,1 ms e executa ações no Mac pelo Tool Bus. Veja [docs/PLANO.md](docs/PLANO.md).
+Estado: **Fase 6 concluída** — a EVE conversa, age no Mac e lembra. Veja [docs/PLANO.md](docs/PLANO.md).
 
 ## Desenvolvimento
 
@@ -43,6 +43,7 @@ uv run ruff check src tests
 | `eve provider list/models` | provedores de IA e seus modelos |
 | `eve ask "..." [-r papel]` | pergunta a um modelo, com streaming |
 | `eve chat [mensagem] [-v]` | conversa com a EVE (sem mensagem, abre um REPL) |
+| `eve memory list/search/add/forget/stats` | memória persistente |
 
 ## Onde as coisas ficam
 
@@ -78,5 +79,6 @@ Configuração por ambiente: `EVE_SERVER__PORT=9000 eve start`.
 | `POST /api/chat` | conversa com a EVE (SSE) |
 | `POST /api/route` | só a decisão de roteamento, sem executar |
 | `GET/DELETE /api/sessions` | sessões de conversa |
+| `GET/POST /api/memory` · `/search` · `/recent` | memória |
 
 No WebSocket o servidor envia `hello`, depois o histórico (`replay: true`) e então os eventos ao vivo. O cliente pode enviar `{"op":"ping"}` e `{"op":"subscribe","patterns":["voice.*"]}`.

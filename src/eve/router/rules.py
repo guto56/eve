@@ -110,6 +110,17 @@ def _volume_level(match: re.Match[str]) -> dict[str, Any] | None:
     return {"level": level} if 0 <= level <= 100 else None
 
 
+def _memory_content(match: re.Match[str]) -> dict[str, Any] | None:
+    texto = match.group("texto").strip().strip("\"'")
+    # Curto demais não é um fato; é ruído.
+    return {"content": texto} if len(texto) >= 8 else None
+
+
+def _memory_query(match: re.Match[str]) -> dict[str, Any] | None:
+    texto = match.group("texto").strip() if "texto" in match.groupdict() else ""
+    return {"query": texto or match.group(0)}
+
+
 def _clipboard_text(match: re.Match[str]) -> dict[str, Any] | None:
     texto = match.group("texto").strip().strip("\"'")
     return {"text": texto} if texto else None
@@ -244,15 +255,19 @@ RULES: tuple[Rule, ...] = (
     ),
     rule(
         "memoria_gravar",
-        r"^(lembre|lembra|memorize|anote|guarde|nao esqueca)\s+(que|de|disso)\b",
+        r"^(lembre|lembra|memorize|anote|guarde|nao esqueca)\s+(que\s+|de\s+)?(?P<texto>.+)$",
         Route.MEMORY,
+        "memory.remember",
+        _memory_content,
         veto=MULTI_STEP,
     ),
     rule(
         "memoria_consultar",
-        r"^(o que (eu )?(te )?(disse|falei|contei)|voce lembra|do que voce lembra"
-        r"|esqueca (o )?que)\b",
+        r"^(o que (eu )?(te )?(disse|falei|contei)|voce lembra|do que voce lembra)"
+        r"\s*(sobre\s+)?(?P<texto>.*)$",
         Route.MEMORY,
+        "memory.recall",
+        _memory_query,
     ),
 )
 
@@ -281,9 +296,19 @@ def apply_rules(text: str) -> RuleHit | None:
 def _restore_originals(
     original: str, match: re.Match[str], arguments: dict[str, Any]
 ) -> dict[str, Any]:
-    """Troca valores normalizados pelos trechos originais, com acento e caixa."""
+    """Troca valores normalizados pelos trechos originais, com acento e caixa.
+
+    A regra casa contra o texto normalizado, mas o que a EVE guarda ou executa
+    tem que ser o que o usuário escreveu — "reuniões de manhã", não "reunioes
+    de manha".
+    """
     restored = dict(arguments)
-    for key, group in (("name", "alvo"), ("text", "texto")):
+    for key, group in (
+        ("name", "alvo"),
+        ("text", "texto"),
+        ("content", "texto"),
+        ("query", "texto"),
+    ):
         if key in restored and group in match.groupdict():
             recorte = _original_span(original, match, group)
             if recorte:

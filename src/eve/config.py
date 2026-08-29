@@ -57,6 +57,17 @@ class FileSettings(BaseModel):
     max_read_bytes: int = Field(default=1_048_576, gt=0)
 
 
+class MemorySettings(BaseModel):
+    """Memória persistente (spec §17, §18)."""
+
+    embedding_model: str = "embeddinggemma"
+    embedding_dimensions: int = Field(default=768, gt=0)
+    context_limit: int = Field(default=4, ge=0, le=20)
+    """Quantas memórias entram no prompt do sistema a cada mensagem."""
+    auto_extract: bool = True
+    """Extrair memórias das conversas automaticamente."""
+
+
 class PermissionSettings(BaseModel):
     """Política de permissões (spec §11).
 
@@ -87,6 +98,7 @@ class Settings(BaseSettings):
     ai: AISettings = AISettings()
     permissions: PermissionSettings = PermissionSettings()
     files: FileSettings = FileSettings()
+    memory: MemorySettings = MemorySettings()
 
     @classmethod
     def settings_customise_sources(

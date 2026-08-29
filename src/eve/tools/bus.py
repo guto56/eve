@@ -71,6 +71,7 @@ class ToolBus:
         audit: AuditLog,
         settings: Settings,
         approvals: ApprovalBroker | None = None,
+        services: dict[str, Any] | None = None,
     ) -> None:
         self.registry = registry
         self.permissions = permissions
@@ -78,6 +79,7 @@ class ToolBus:
         self.audit = audit
         self.settings = settings
         self.approvals = approvals or ApprovalBroker(settings.permissions.confirm_timeout)
+        self.services: dict[str, Any] = services if services is not None else {}
 
     async def call(
         self,
@@ -162,6 +164,7 @@ class ToolBus:
             settings=self.settings,
             bus=self.events,
             caller=caller,
+            services=self.services,
         )
 
         try:

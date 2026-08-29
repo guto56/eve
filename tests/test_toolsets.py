@@ -69,6 +69,6 @@ def test_filtering_actually_shrinks_the_prompt(full_registry: ToolRegistry) -> N
     filtradas = full_registry.wire_tools(
         select_tools(full_registry, Route.COMMAND, "crie uma pasta").names
     )
-    assert len(todas) == 23
+    assert len(todas) == 27
     assert len(filtradas) == 8
     assert len(str(filtradas)) < len(str(todas)) / 2
