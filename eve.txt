@@ -1,0 +1,1458 @@
+# EVE — VISÃO GERAL, ARQUITETURA E OBJETIVOS DO PROJETO
+
+## 1. Visão do projeto
+
+A EVE será um assistente pessoal de IA para macOS, com foco em:
+
+* voz natural;
+* interação contínua;
+* resposta extremamente rápida;
+* execução de ações no computador;
+* automação de tarefas;
+* pesquisa em tempo real;
+* memória persistente;
+* extensibilidade por Skills e MCPs;
+* integração com serviços externos;
+* capacidade futura de realizar chamadas telefônicas;
+* capacidade futura de detectar acontecimentos e iniciar uma conversa automaticamente.
+
+A ideia não é criar apenas um chatbot.
+
+A EVE deve funcionar como uma camada inteligente sobre o computador e, futuramente, sobre outros dispositivos e serviços.
+
+A experiência desejada é:
+
+"Instalei meu Mac novo → executei um único comando → a EVE foi instalada → o sistema configurou o necessário → a interface web abriu automaticamente → configurei minhas chaves e permissões → EVE está pronta."
+
+---
+
+# 2. Experiência de instalação
+
+A instalação precisa ser extremamente simples.
+
+Exemplo:
+
+`curl -fsSL https://get.eve.ai | bash`
+
+ou outro mecanismo equivalente.
+
+Depois do comando, o instalador deve automaticamente:
+
+* detectar o sistema e hardware;
+* verificar compatibilidade;
+* instalar os componentes necessários;
+* instalar o mecanismo de IA local;
+* instalar o sistema de voz;
+* instalar memória;
+* instalar automação de navegador;
+* instalar suporte a MCP;
+* instalar Skills básicas;
+* configurar o serviço de background;
+* preparar a comunicação entre backend e interface;
+* preparar armazenamento local;
+* verificar permissões necessárias;
+* abrir automaticamente a interface web da EVE.
+
+O usuário não deve precisar saber o que está sendo instalado internamente.
+
+A instalação deve ser:
+
+* idempotente;
+* segura;
+* atualizável;
+* reversível;
+* capaz de diagnosticar problemas;
+* capaz de preservar memória, configurações, Skills e credenciais durante atualizações.
+
+---
+
+# 3. Primeiro acesso
+
+Após a instalação:
+
+`localhost:<porta>`
+
+deve abrir automaticamente.
+
+A primeira experiência deve ser um onboarding visual.
+
+Fluxo esperado:
+
+1. Welcome
+2. Detecção do hardware
+3. Configuração da IA local
+4. Configuração de provedores externos
+5. Configuração de voz
+6. Configuração de permissões do macOS
+7. Configuração de memória
+8. Configuração opcional de telefonia
+9. Teste final
+10. EVE pronta
+
+A interface deve deixar claro o que está funcionando, o que falta e o que é opcional.
+
+---
+
+# 4. Interface web
+
+A interface web será a principal interface da EVE.
+
+Não deve parecer um painel administrativo tradicional.
+
+Deve parecer a própria EVE.
+
+A experiência principal deve permitir:
+
+* conversar por texto;
+* conversar por voz;
+* ver quando EVE está ouvindo;
+* ver quando está processando;
+* visualizar tarefas em andamento;
+* visualizar ferramentas sendo utilizadas;
+* receber notificações;
+* consultar memória;
+* gerenciar Skills;
+* gerenciar MCPs;
+* configurar provedores;
+* configurar permissões;
+* controlar integrações;
+* visualizar histórico.
+
+A interface deve ser:
+
+* moderna;
+* minimalista;
+* fluida;
+* responsiva;
+* rápida;
+* centrada na conversa;
+* preparada para streaming;
+* preparada para eventos em tempo real.
+
+A EVE deve poder atualizar a interface enquanto trabalha.
+
+Exemplo:
+
+"Estou pesquisando isso..."
+
+→
+
+"Pesquisando na web..."
+
+→
+
+"Encontrei 6 fontes..."
+
+→
+
+"Analisando..."
+
+→
+
+"Pronto."
+
+---
+
+# 5. Arquitetura conceitual
+
+A arquitetura deve ser modular.
+
+Conceito:
+
+Usuário
+↓
+Voz / Interface
+↓
+EVE Core
+↓
+Router
+↓
+Memória / IA local / IA externa / Tools / Skills / MCP
+↓
+Sistema operacional / navegador / internet / serviços externos
+
+A IA não deve ter acesso direto e irrestrito ao sistema.
+
+Ela deve solicitar ações através de uma camada de ferramentas controlada.
+
+---
+
+# 6. IA local
+
+A EVE deve possuir uma IA local pequena e extremamente rápida.
+
+Função principal:
+
+* conversa casual;
+* respostas simples;
+* interpretação básica;
+* contexto imediato;
+* detecção de intenção;
+* decisão sobre quando uma tarefa deve ser encaminhada para um agente ou provedor externo.
+
+Exemplos de modelos possíveis:
+
+* LFM2.5;
+* Qwen;
+* Gemma;
+* outros modelos pequenos e eficientes.
+
+O modelo local não precisa resolver tudo.
+
+O objetivo é que ele permaneça disponível continuamente e responda com baixa latência.
+
+Ele deve funcionar como uma primeira camada de inteligência.
+
+---
+
+# 7. IA externa
+
+Quando a tarefa for complexa, atual, longa ou exigir capacidades que a IA local não possui, a EVE deve poder encaminhar a tarefa para serviços externos.
+
+Exemplos:
+
+* Gemini;
+* OpenRouter;
+* outros provedores compatíveis.
+
+Exemplos de situações:
+
+"Pesquise as notícias mais recentes sobre X."
+
+"Analise este projeto inteiro."
+
+"Compare essas tecnologias."
+
+"Investigue esse problema no meu código."
+
+"Faça uma tarefa complexa utilizando navegador e várias ferramentas."
+
+A EVE deve decidir dinamicamente quando utilizar inteligência externa.
+
+---
+
+# 8. Roteamento inteligente
+
+A EVE deve possuir um Router.
+
+Conceito:
+
+Entrada do usuário
+↓
+detecção de intenção
+↓
+classificação
+
+Possibilidades:
+
+CHAT
+→ responder localmente
+
+COMMAND
+→ executar ação diretamente
+
+TASK
+→ iniciar agente
+
+WEB
+→ pesquisar / navegar
+
+MEMORY
+→ consultar ou atualizar memória
+
+MCP
+→ utilizar servidor MCP
+
+SKILL
+→ utilizar Skill específica
+
+EXTERNAL_AI
+→ enviar para provedor externo
+
+VOICE
+→ tratar fluxo de voz
+
+CALL
+→ iniciar fluxo telefônico
+
+A regra geral é:
+
+Não utilizar IA pesada para operações que podem ser resolvidas determinística e instantaneamente.
+
+Exemplo:
+
+"Abra o Safari."
+
+não precisa de raciocínio complexo.
+
+"Analise este repositório e descubra por que o build está falhando."
+
+pode exigir um agente.
+
+---
+
+# 9. Ferramentas
+
+A EVE deve possuir uma camada central de Tools.
+
+Ela deve permitir funções como:
+
+* abrir aplicativos;
+* fechar aplicativos;
+* abrir URLs;
+* controlar navegador;
+* pesquisar na internet;
+* criar arquivos;
+* ler arquivos;
+* mover arquivos;
+* criar pastas;
+* organizar arquivos;
+* controlar mídia;
+* controlar volume;
+* mostrar notificações;
+* criar eventos;
+* editar eventos;
+* excluir eventos;
+* criar lembretes;
+* ler informações do sistema;
+* executar determinadas operações no terminal;
+* capturar screenshots;
+* trabalhar com clipboard;
+* interagir com aplicações;
+* executar fluxos;
+* chamar APIs;
+* executar Skills;
+* chamar MCPs.
+
+Todas as ações devem passar por uma camada central.
+
+---
+
+# 10. Tool Bus
+
+A EVE deve ter um Tool Bus.
+
+Nenhum modelo deve executar ações diretamente.
+
+Fluxo:
+
+Modelo
+↓
+Tool Request
+↓
+Tool Bus
+↓
+Validação
+↓
+Permission Engine
+↓
+Execução
+↓
+Resultado
+↓
+Modelo
+
+Exemplo:
+
+A IA solicita:
+
+`calendar.create`
+
+com:
+
+* título;
+* data;
+* horário;
+* duração;
+* outros parâmetros.
+
+O Tool Bus valida os argumentos, verifica permissões e somente então executa a operação.
+
+---
+
+# 11. Permissões
+
+A EVE precisa possuir um Permission Engine.
+
+Categorias conceituais:
+
+SAFE
+→ pode executar automaticamente
+
+CONFIRM
+→ exige confirmação
+
+PRIVILEGED
+→ exige permissões específicas
+
+BLOCKED
+→ nunca executar automaticamente
+
+Exemplos:
+
+Abrir aplicativo
+→ SAFE
+
+Abrir site
+→ SAFE
+
+Criar pasta
+→ SAFE
+
+Criar evento no calendário
+→ pode ser configurável
+
+Enviar mensagem
+→ CONFIRM
+
+Enviar email
+→ CONFIRM
+
+Apagar arquivos
+→ CONFIRM
+
+Executar comandos potencialmente destrutivos
+→ PRIVILEGED
+
+Instalar software
+→ PRIVILEGED
+
+A EVE deve deixar o usuário configurar níveis de confiança.
+
+---
+
+# 12. Integração profunda com macOS
+
+A EVE deve aproveitar APIs nativas do macOS quando existirem.
+
+Exemplos de capacidades:
+
+* abertura e controle de aplicativos;
+* Calendar;
+* Reminders;
+* Notifications;
+* Accessibility;
+* Automation;
+* arquivos e pastas;
+* clipboard;
+* processos;
+* sistema;
+* atalhos;
+* integração com outros componentes do macOS.
+
+A EVE deve solicitar permissões somente quando realmente precisar delas.
+
+A interface deve explicar para que cada permissão é necessária.
+
+---
+
+# 13. Voz
+
+A voz deve ser uma parte central da EVE.
+
+Fluxo conceitual:
+
+Microfone
+↓
+Wake word / ativação
+↓
+Speech-to-Text
+↓
+EVE Core
+↓
+processamento
+↓
+Text-to-Speech
+↓
+áudio
+
+Exemplos de tecnologias que podem ser usadas:
+
+* Whisper;
+* engines locais de TTS;
+* serviços como ElevenLabs;
+* outras soluções de baixa latência.
+
+A experiência deve parecer uma conversa, não uma sequência de gravações.
+
+A EVE deve suportar futuramente:
+
+* interrupção enquanto fala;
+* respostas em streaming;
+* fala natural;
+* detecção de silêncio;
+* wake word;
+* contexto contínuo;
+* modos de conversa.
+
+---
+
+# 14. Uso contínuo
+
+A EVE deve poder permanecer ativa em background.
+
+Após o login do macOS:
+
+Mac inicia
+↓
+EVE inicia
+↓
+serviço fica disponível
+↓
+wake word / eventos / notificações podem funcionar
+
+A interface web não precisa estar aberta para o Core continuar funcionando.
+
+---
+
+# 15. Navegador
+
+A EVE deve ter automação real de navegador.
+
+Exemplos de capacidades:
+
+* abrir navegador;
+* abrir páginas;
+* pesquisar;
+* clicar;
+* preencher formulários;
+* navegar;
+* ler conteúdo;
+* baixar arquivos;
+* fazer upload;
+* capturar screenshots;
+* trabalhar com sites;
+* acompanhar fluxos multi-etapas.
+
+Exemplo de tecnologia:
+
+Playwright e/ou Playwright MCP.
+
+O navegador deve ser tratado como uma Tool.
+
+---
+
+# 16. Pesquisa em tempo real
+
+A EVE deve poder pesquisar informações atuais.
+
+Possíveis mecanismos:
+
+* Google Search;
+* APIs de pesquisa;
+* Gemini com grounding;
+* outras APIs de web search.
+
+Quando a pesquisa for necessária, a EVE deve:
+
+1. detectar que a informação exige atualização;
+2. pesquisar;
+3. analisar;
+4. retornar resultado;
+5. preferencialmente incluir fontes.
+
+---
+
+# 17. Memória
+
+A memória é uma das características principais da EVE.
+
+Ela não deve depender somente do histórico de chat.
+
+A memória deve ser persistente.
+
+Conceito de camadas:
+
+## Memória de trabalho
+
+O que está acontecendo agora.
+
+## Memória episódica
+
+Coisas que aconteceram.
+
+Exemplo:
+
+"Hoje trabalhamos no módulo de voz."
+
+## Memória semântica
+
+Informações persistentes.
+
+Exemplo:
+
+"O projeto X usa determinada tecnologia."
+
+## Memória procedural
+
+Como realizar tarefas.
+
+Exemplo:
+
+"Para iniciar meu ambiente de desenvolvimento, siga este fluxo."
+
+---
+
+# 18. Memória inteligente
+
+A EVE não deve salvar tudo indiscriminadamente.
+
+Deve existir um Memory Manager.
+
+Fluxo:
+
+Conversa
+↓
+extração de possíveis memórias
+↓
+avaliação
+↓
+importância
+↓
+deduplicação
+↓
+armazenamento
+
+Cada memória pode possuir:
+
+* conteúdo;
+* tipo;
+* importância;
+* confiança;
+* origem;
+* data;
+* contexto;
+* relacionamento com outras memórias.
+
+A memória deve ser pesquisável semanticamente e por texto.
+
+Tecnologias possíveis:
+
+* SQLite;
+* FTS;
+* busca vetorial;
+* embeddings locais;
+* sqlite-vec ou equivalente.
+
+A memória deve permanecer local por padrão, salvo quando o usuário optar por sincronização externa.
+
+---
+
+# 19. Skills
+
+A EVE deve possuir um sistema de Skills.
+
+Uma Skill representa uma capacidade especializada.
+
+Exemplos:
+
+* Spotify;
+* GitHub;
+* Notion;
+* desenvolvimento;
+* música;
+* automação;
+* smart home;
+* produtividade;
+* edição;
+* pesquisa.
+
+Estrutura conceitual:
+
+Skill
+├── metadata
+├── instruções
+├── ferramentas
+├── configurações
+├── permissões
+└── documentação
+
+A EVE deve permitir:
+
+* instalar;
+* remover;
+* atualizar;
+* pesquisar;
+* ativar;
+* desativar;
+* configurar;
+* listar;
+* futuramente publicar Skills.
+
+Exemplos:
+
+`eve skill list`
+
+`eve skill install spotify`
+
+`eve skill remove spotify`
+
+`eve skill update spotify`
+
+---
+
+# 20. MCP
+
+MCP deve ser uma camada importante de extensibilidade.
+
+A EVE deve funcionar como cliente MCP.
+
+Possibilidades:
+
+* adicionar MCPs;
+* remover MCPs;
+* configurar MCPs;
+* ativar/desativar MCPs;
+* visualizar ferramentas disponíveis;
+* visualizar permissões;
+* monitorar estado.
+
+Exemplos:
+
+`eve mcp list`
+
+`eve mcp add github`
+
+`eve mcp remove github`
+
+`eve mcp status`
+
+Exemplos de MCPs:
+
+* GitHub;
+* Playwright;
+* filesystem;
+* banco de dados;
+* serviços externos;
+* ferramentas próprias.
+
+A EVE deve tratar MCP como uma extensão do Tool Bus, e não como o único mecanismo de ferramentas.
+
+---
+
+# 21. Skills e MCPs precisam de segurança
+
+Cada extensão deve declarar:
+
+* ferramentas;
+* permissões;
+* recursos acessados;
+* configurações;
+* origem;
+* versão.
+
+A EVE deve permitir ao usuário visualizar exatamente o que está sendo instalado.
+
+Extensões desconhecidas não devem obter acesso irrestrito automaticamente.
+
+---
+
+# 22. API Keys e Secrets
+
+Credenciais devem ser tratadas como secrets.
+
+Não armazenar chaves em:
+
+* código;
+* banco comum;
+* arquivos públicos;
+* histórico de chat;
+* logs.
+
+Usar armazenamento seguro do sistema, como o macOS Keychain.
+
+Exemplos de credenciais:
+
+* Gemini;
+* OpenRouter;
+* ElevenLabs;
+* Twilio;
+* outras APIs futuras.
+
+A interface pode permitir:
+
+"Conectar Gemini"
+
+"Conectar OpenRouter"
+
+"Conectar ElevenLabs"
+
+"Conectar Twilio"
+
+A EVE deve indicar claramente quais integrações são obrigatórias e quais são opcionais.
+
+---
+
+# 23. CLI
+
+A EVE deve possuir uma CLI de administração.
+
+Exemplo:
+
+`eve --help`
+
+Conceito:
+
+Core:
+
+* start
+* stop
+* restart
+* status
+* doctor
+* logs
+* update
+
+AI:
+
+* model
+* provider
+
+Memory:
+
+* memory
+
+Skills:
+
+* skill
+
+MCP:
+
+* mcp
+
+Security:
+
+* key
+* permission
+
+Voice:
+
+* voice
+
+Calls:
+
+* call
+
+Browser:
+
+* browser
+
+Configuration:
+
+* config
+
+Web:
+
+* web
+
+---
+
+# 24. Exemplos da CLI
+
+`eve status`
+
+Mostra:
+
+* EVE ativa;
+* IA local;
+* voz;
+* memória;
+* MCPs;
+* Skills;
+* permissões;
+* integrações;
+* saúde dos serviços.
+
+`eve doctor`
+
+Executa diagnóstico completo.
+
+Verifica:
+
+* componentes instalados;
+* portas;
+* permissões;
+* serviços;
+* modelos;
+* memória;
+* banco;
+* integração com provedores;
+* navegador;
+* voz.
+
+`eve logs`
+
+Mostra logs relevantes.
+
+`eve web`
+
+Abre a interface web.
+
+---
+
+# 25. Interface e CLI devem controlar o mesmo sistema
+
+Nada deve existir somente na CLI.
+
+Tudo que fizer sentido deve existir também na interface web.
+
+Exemplo:
+
+CLI:
+
+`eve skill install spotify`
+
+Interface:
+
+Skills → Spotify → Install
+
+Ambos devem modificar o mesmo estado interno.
+
+---
+
+# 26. Background service
+
+A EVE deve possuir um daemon/serviço persistente.
+
+Responsabilidades:
+
+* ouvir eventos;
+* processar voz;
+* administrar IA;
+* gerenciar memória;
+* executar tarefas;
+* monitorar Skills;
+* gerenciar MCP;
+* receber eventos;
+* enviar notificações;
+* comunicar com a interface web.
+
+A interface web é apenas uma camada de apresentação.
+
+---
+
+# 27. Comunicação interna
+
+O frontend e o Core devem se comunicar em tempo real.
+
+Preferência conceitual:
+
+WebSocket ou mecanismo equivalente.
+
+Isso permite transmitir:
+
+* tokens;
+* estados;
+* eventos;
+* progresso;
+* ferramentas;
+* logs relevantes;
+* voz;
+* notificações;
+* mudanças de memória;
+* chamadas telefônicas.
+
+---
+
+# 28. Eventos
+
+A EVE deve possuir um Event System.
+
+Exemplos de eventos:
+
+* app_opened;
+* app_closed;
+* file_changed;
+* build_failed;
+* calendar_event;
+* reminder;
+* notification;
+* skill_installed;
+* mcp_connected;
+* system_started;
+* user_idle;
+* message_received;
+* call_received;
+* call_finished.
+
+Esse sistema será importante para tornar a EVE proativa no futuro.
+
+---
+
+# 29. EVE proativa
+
+A EVE não deve depender sempre de:
+
+"Usuário perguntou → EVE respondeu."
+
+Futuro desejado:
+
+Evento
+↓
+EVE detecta
+↓
+EVE analisa importância
+↓
+EVE decide ação
+
+Exemplos:
+
+* projeto apresenta erro;
+* build falha;
+* evento importante se aproxima;
+* arquivo crítico mudou;
+* tarefa foi concluída;
+* determinado serviço caiu;
+* alguma condição definida pelo usuário ocorreu.
+
+A EVE pode então:
+
+* mandar notificação;
+* aparecer na interface;
+* falar;
+* perguntar algo;
+* executar ação;
+* futuramente iniciar uma ligação.
+
+---
+
+# 30. Observador de código e projetos
+
+No futuro, a EVE poderá observar projetos locais.
+
+Exemplos:
+
+* alterações de arquivos;
+* Git;
+* commits;
+* builds;
+* testes;
+* logs;
+* exceptions;
+* dependências;
+* issues.
+
+Fluxo:
+
+Projeto
+↓
+Observer
+↓
+evento
+↓
+análise
+↓
+importância
+↓
+ação
+
+Exemplo:
+
+Build falhou
+↓
+EVE analisa
+↓
+EVE identifica possível causa
+↓
+notifica usuário
+
+No futuro:
+
+EVE identifica problema importante
+↓
+inicia ligação
+↓
+explica a situação
+
+---
+
+# 31. Telefonia
+
+A telefonia deve ser pensada como uma integração futura e opcional.
+
+A EVE precisa eventualmente poder:
+
+* receber chamadas;
+* fazer chamadas;
+* conversar por voz;
+* manter contexto;
+* autenticar o usuário;
+* iniciar chamadas por evento.
+
+Exemplos de infraestrutura:
+
+* Twilio;
+* gateways SIP;
+* serviços de voz em tempo real;
+* outros provedores.
+
+Arquitetura:
+
+EVE Core
+↓
+Voice Gateway
+↓
+provedor de telefonia
+↓
+rede telefônica
+
+A telefonia não deve depender da interface web aberta.
+
+---
+
+# 32. Chamadas automáticas
+
+A EVE poderá iniciar uma chamada com base em eventos configuráveis.
+
+Exemplo:
+
+Build crítico falhou
+↓
+análise
+↓
+impacto alto
+↓
+política permite interrupção
+↓
+EVE liga
+
+Outro exemplo:
+
+Uma tarefa importante foi concluída
+↓
+EVE avalia
+↓
+notifica em vez de ligar
+
+A intensidade da intervenção deve ser configurável.
+
+---
+
+# 33. Sistema de notificações
+
+A EVE deve ter níveis de prioridade.
+
+Exemplo:
+
+LOW
+→ silencioso / histórico
+
+MEDIUM
+→ notificação
+
+HIGH
+→ notificação + ação opcional
+
+CRITICAL
+→ intervenção imediata / ligação, caso permitido
+
+O usuário deve poder configurar isso por evento.
+
+---
+
+# 34. Agentes
+
+Quando uma solicitação exigir várias etapas, a EVE deve poder criar uma tarefa de agente.
+
+Exemplo:
+
+"Pesquise três alternativas, compare, abra os sites, extraia preços e me dê uma recomendação."
+
+Fluxo:
+
+Pedido
+↓
+planejamento
+↓
+Tools / Web / MCP
+↓
+execução
+↓
+resultados intermediários
+↓
+síntese
+↓
+resposta
+
+A EVE deve mostrar progresso sem expor raciocínio interno sensível.
+
+---
+
+# 35. Contexto
+
+O sistema deve combinar diferentes contextos:
+
+* conversa atual;
+* memória;
+* estado do sistema;
+* aplicativos abertos;
+* página atual;
+* tarefa atual;
+* Skills disponíveis;
+* MCPs conectados;
+* preferências;
+* eventos recentes.
+
+A EVE deve enviar para cada modelo apenas o contexto necessário.
+
+Não enviar todo o histórico sempre.
+
+---
+
+# 36. Modelo de operação
+
+A EVE deve funcionar como um sistema híbrido:
+
+LOCAL
+→ rapidez, privacidade, conversa, roteamento
+
+CLOUD
+→ inteligência avançada, pesquisa, tarefas complexas
+
+TOOLS
+→ execução
+
+MEMORY
+→ continuidade
+
+SKILLS
+→ especialização
+
+MCP
+→ extensibilidade
+
+EVENTS
+→ proatividade
+
+VOICE
+→ presença
+
+WEB UI
+→ interface
+
+CLI
+→ administração
+
+---
+
+# 37. Privacidade
+
+Princípio:
+
+Local-first.
+
+Sempre que possível:
+
+* processamento local;
+* memória local;
+* secrets locais;
+* arquivos locais;
+* comunicação controlada.
+
+Quando dados precisarem ser enviados para serviços externos, a EVE deve deixar isso claro.
+
+O usuário deve conseguir saber:
+
+* qual modelo recebeu o conteúdo;
+* qual ferramenta foi usada;
+* qual integração foi acionada;
+* quais dados foram enviados.
+
+---
+
+# 38. Observabilidade
+
+A EVE deve possuir logs e métricas internas.
+
+Exemplos:
+
+* latência;
+* modelo usado;
+* ferramenta utilizada;
+* erros;
+* chamadas externas;
+* uso de memória;
+* estado das Skills;
+* estado dos MCPs;
+* chamadas;
+* eventos.
+
+A observabilidade deve ajudar tanto usuários quanto desenvolvedores.
+
+---
+
+# 39. Atualizações
+
+A EVE deve poder atualizar:
+
+* Core;
+* interface;
+* Skills;
+* MCPs;
+* componentes locais;
+* modelos;
+* dependências.
+
+Atualizações não devem destruir:
+
+* memória;
+* credenciais;
+* configuração;
+* preferências;
+* Skills instaladas.
+
+Idealmente:
+
+`eve update`
+
+ou botão na interface.
+
+---
+
+# 40. Recuperação
+
+A EVE deve ser capaz de se recuperar de falhas.
+
+Exemplos:
+
+* serviço caiu;
+* banco bloqueado;
+* modelo não carregou;
+* MCP desconectado;
+* navegador travou;
+* API indisponível.
+
+A EVE deve mostrar o problema e, quando possível, corrigir automaticamente.
+
+---
+
+# 41. Futuro da EVE
+
+A arquitetura deve permitir adicionar:
+
+* visão;
+* análise de tela;
+* câmera;
+* controle de dispositivos;
+* smart home;
+* integração com iPhone;
+* integração com outros computadores;
+* sincronização;
+* voz mais natural;
+* personalidade;
+* agentes especializados;
+* marketplace de Skills;
+* marketplace de MCPs;
+* automações temporais;
+* workflows;
+* tarefas agendadas;
+* monitoramento;
+* capacidade de tomar iniciativa;
+* memória ainda mais sofisticada.
+
+A meta não é construir todas essas coisas na primeira versão.
+
+A meta é construir um Core que permita adicioná-las sem reescrever o sistema.
+
+---
+
+# 42. Princípios fundamentais
+
+1. A EVE deve parecer um único produto, mesmo sendo composta por vários serviços.
+
+2. O usuário final não deve precisar conhecer a infraestrutura.
+
+3. O único comando inicial deve fazer praticamente tudo.
+
+4. O modelo local deve priorizar baixa latência.
+
+5. Modelos externos devem ser utilizados sob demanda.
+
+6. IA não deve executar ações diretamente.
+
+7. Todas as ações passam pelo Tool Bus.
+
+8. Permissões devem existir em nível de ferramenta.
+
+9. Secrets devem ser armazenados de forma segura.
+
+10. Memória deve ser persistente, pesquisável e inteligente.
+
+11. Skills devem permitir expansão.
+
+12. MCP deve permitir integração com o ecossistema externo.
+
+13. A interface web deve funcionar em tempo real.
+
+14. O Core deve funcionar independentemente da interface estar aberta.
+
+15. EVE deve ser local-first.
+
+16. EVE deve ser preparada para ser proativa.
+
+17. O projeto deve ser modular desde o início.
+
+18. Tudo que hoje parece "futuro" deve ser considerado na arquitetura atual, mesmo que a implementação fique para depois.
+
+---
+
+# 43. Experiência final desejada
+
+O objetivo final da primeira instalação:
+
+Usuário compra/configura um Mac novo.
+
+Executa um único comando.
+
+EVE instala tudo.
+
+A interface web abre.
+
+O usuário fornece apenas as credenciais necessárias.
+
+Concede as permissões necessárias.
+
+Faz o primeiro teste de voz.
+
+EVE responde.
+
+A partir daí:
+
+"Abra o Safari."
+
+"Coloque uma reunião amanhã às 15h."
+
+"Pesquise isso."
+
+"Crie uma pasta para esse projeto."
+
+"Analise este código."
+
+"Abra meu GitHub."
+
+"Procure o que aconteceu hoje."
+
+"Me lembre disso amanhã."
+
+"Faça isso usando aquela Skill."
+
+"Use o MCP do GitHub."
+
+"Veja o que está acontecendo no meu projeto."
+
+"Me avise se der problema."
+
+E, futuramente:
+
+"Me ligue quando algo realmente importante acontecer."
+
+A EVE deve evoluir de um simples assistente para uma presença digital persistente, conectada ao computador, à web, aos serviços do usuário e, eventualmente, ao telefone e a outros dispositivos.
+
+Inicie esse projeto:
+SEMPRE pesquise ANTES de CADA etapa (melhor linguagem, melhor método e tudo mais)
+SEMPRE faca testes e se algo der errado tente novamente
+Ja coloquei algumas credenciais nessa pasta em env.txt, mas nao precisa usar exatamente isso se tiver outros melhores
+Quando for me responder responda direto, sem falar coisas desnecessárias
+Separe por fases esse projeto
+Faca etapa por etapa, com testes, prosseguindo apenas se tudo ok naquela etapa
+

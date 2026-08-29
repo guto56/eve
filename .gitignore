@@ -1,0 +1,30 @@
+# secrets
+env.txt
+env.txt.bak
+.env
+*.pem
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+dist/
+build/
+
+# node
+node_modules/
+ui/dist/
+
+# eve runtime
+.eve-test/
+*.db
+*.db-wal
+*.db-shm
+logs/
+
+# macOS
+.DS_Store
