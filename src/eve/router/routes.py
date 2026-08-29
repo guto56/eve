@@ -45,9 +45,9 @@ IMPLEMENTED: frozenset[Route] = frozenset(
 NAMESPACES: dict[Route, tuple[str, ...]] = {
     Route.CHAT: (),
     Route.COMMAND: ("app", "url", "file", "clipboard", "system"),
-    Route.WEB: ("url", "web"),
+    Route.WEB: ("web", "url"),
     Route.MEMORY: ("memory",),
-    Route.TASK: ("app", "url", "file", "clipboard", "system", "web", "memory"),
+    Route.TASK: ("app", "url", "file", "clipboard", "system", "web", "browser", "memory"),
     Route.SKILL: (),
     Route.MCP: (),
     Route.VOICE: (),

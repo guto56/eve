@@ -11,6 +11,7 @@ export interface ToolRun {
 }
 
 export interface Turn {
+  sources?: string[];
   id: string;
   role: Role;
   text: string;

@@ -19,6 +19,8 @@ dependencies = [
     "sqlite-vec>=0.1.9",
     "websockets>=17.1",
     "mcp>=2.1.1",
+    "playwright>=1.62.0",
+    "tavily-python>=0.8.0",
 ]
 
 [project.scripts]

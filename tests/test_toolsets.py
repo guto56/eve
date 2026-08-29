@@ -55,8 +55,13 @@ def test_selection_is_deterministic(full_registry: ToolRegistry) -> None:
 
 def test_small_namespace_returns_everything(full_registry: ToolRegistry) -> None:
     selection = select_tools(full_registry, Route.WEB, "pesquise algo")
-    assert selection.names == ("url.open",)
+    assert selection.names == ("url.open", "web.extract", "web.search")
     assert "todas" in selection.reason
+
+
+def test_web_route_now_has_search(full_registry: ToolRegistry) -> None:
+    """A rota WEB deixou de ser um beco sem saída."""
+    assert "web.search" in select_tools(full_registry, Route.WEB, "notícias de hoje").names
 
 
 def test_empty_registry_is_handled() -> None:
@@ -71,6 +76,6 @@ def test_filtering_actually_shrinks_the_prompt(full_registry: ToolRegistry) -> N
     filtradas = full_registry.wire_tools(
         select_tools(full_registry, Route.COMMAND, "crie uma pasta").names
     )
-    assert len(todas) == 27
+    assert len(todas) == 37
     assert len(filtradas) == 8
     assert len(str(filtradas)) < len(str(todas)) / 2

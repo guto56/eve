@@ -63,6 +63,15 @@ export function TurnView({ turn, detalhes }: { turn: Turn; detalhes: boolean }) 
           {turn.streaming && <span className="caret" />}
         </div>
       )}
+      {!turn.streaming && turn.sources?.length ? (
+        <div className="sources">
+          {turn.sources.slice(0, 6).map((url) => (
+            <a key={url} href={url} target="_blank" rel="noreferrer noopener">
+              {new URL(url).hostname.replace(/^www\./, "")}
+            </a>
+          ))}
+        </div>
+      ) : null}
     </div>
   );
 }

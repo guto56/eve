@@ -132,5 +132,8 @@ def full_registry():
     from eve.tools.macos_tools import register_macos_tools
     from eve.tools.memory_tools import register_memory_tools
     from eve.tools.registry import ToolRegistry
+    from eve.tools.web_tools import register_web_tools
 
-    return register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    return register_web_tools(
+        register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    )

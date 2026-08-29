@@ -2,7 +2,7 @@
 
 Assistente pessoal de IA local-first para macOS.
 
-Estado: **Fase 9 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra, tem interface web e se estende por Skills e MCP. Veja [docs/PLANO.md](docs/PLANO.md).
+Estado: **Fase 10 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra, pesquisa na web, controla um navegador, tem interface web e se estende por Skills e MCP. Veja [docs/PLANO.md](docs/PLANO.md).
 
 ## Instalação
 

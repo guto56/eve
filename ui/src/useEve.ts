@@ -64,6 +64,15 @@ export function useEve() {
           break;
         case "tool_result":
           patchLast((turn) => {
+            // As fontes vêm do resultado real da busca, nunca do texto do
+            // modelo — endereço escrito por modelo pode não existir.
+            const encontradas =
+              frame.name === "web.search"
+                ? ((frame.value as { sources?: string[] } | null)?.sources ?? [])
+                : [];
+            const sources = encontradas.length
+              ? [...new Set([...(turn.sources ?? []), ...encontradas])]
+              : turn.sources;
             const tools = [...turn.tools];
             for (let i = tools.length - 1; i >= 0; i--) {
               if (tools[i].name === frame.name && tools[i].ok === undefined) {
@@ -77,7 +86,7 @@ export function useEve() {
                 break;
               }
             }
-            return { ...turn, tools };
+            return { ...turn, tools, sources };
           });
           break;
         case "delta":

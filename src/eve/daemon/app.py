@@ -11,11 +11,13 @@ import os
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from typing import Any
 
 from fastapi import FastAPI
 
 from eve import __version__
 from eve.ai.manager import ProviderManager
+from eve.browser.session import BrowserSession
 from eve.bus import EventBus
 from eve.chat.engine import ChatEngine
 from eve.config import Settings, load_settings
@@ -40,6 +42,8 @@ from eve.tools.macos_tools import register_macos_tools
 from eve.tools.memory_tools import register_memory_tools
 from eve.tools.registry import ToolRegistry
 from eve.tools.spec import RiskLevel
+from eve.tools.web_tools import register_web_tools
+from eve.websearch.tavily import TavilySearch
 
 log = get_logger(__name__)
 
@@ -64,6 +68,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conexoes.cancel()
         await asyncio.gather(conexoes, return_exceptions=True)
         await app.state.mcp.aclose()
+        await app.state.browser.close()
+        if app.state.search is not None:
+            await app.state.search.aclose()
         removidas = await app.state.memory.housekeeping()
         if removidas:
             log.info("memoria.expiradas_removidas", count=removidas)
@@ -91,7 +98,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.secrets = build_store(paths().ensure().home / "secrets.json")
     app.state.providers = ProviderManager(settings, app.state.secrets)
     app.state.memory = build_memory(settings, app.state.bus, app.state.providers)
-    app.state.tools = build_tool_bus(settings, app.state.bus, {"memory": app.state.memory})
+    app.state.browser = BrowserSession()
+    app.state.search = _build_search(app.state.secrets)
+    app.state.tools = build_tool_bus(
+        settings,
+        app.state.bus,
+        {
+            "memory": app.state.memory,
+            "browser": app.state.browser,
+            "search": app.state.search,
+        },
+    )
     app.state.mcp = MCPManager(app.state.tools.registry)
     app.state.skills = SkillManager(paths().ensure().skills, app.state.secrets, app.state.mcp)
     app.state.skills.load_all()
@@ -138,7 +155,9 @@ def build_tool_bus(
     settings: Settings, bus: EventBus, services: dict[str, object] | None = None
 ) -> ToolBus:
     """Monta registro, permissões, auditoria e Tool Bus a partir da configuração."""
-    registry = register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    registry = register_web_tools(
+        register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    )
     permissions = PermissionEngine(
         overrides=parse_overrides(settings.permissions.overrides),
         grants=dict(settings.permissions.grants),
@@ -152,6 +171,14 @@ def build_tool_bus(
         approvals=ApprovalBroker(settings.permissions.confirm_timeout),
         services=dict(services or {}),
     )
+
+
+def _build_search(secrets: Any) -> TavilySearch | None:
+    """``None`` quando não há credencial — a EVE segue sem pesquisar."""
+    try:
+        return TavilySearch(secrets.get("TAVILY_API_KEY") or "")
+    except ValueError:
+        return None
 
 
 def _standalone_servers(settings: Settings) -> list[MCPServerConfig]:

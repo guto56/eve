@@ -14,6 +14,7 @@ import tomllib
 from collections.abc import Callable
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from eve.config import Settings
 from eve.paths import paths
@@ -132,8 +133,11 @@ def check_tools(settings: Settings) -> Check:
     from eve.tools.macos_tools import register_macos_tools
     from eve.tools.memory_tools import register_memory_tools
     from eve.tools.registry import ToolRegistry
+    from eve.tools.web_tools import register_web_tools
 
-    registry = register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    registry = register_web_tools(
+        register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    )
     engine = PermissionEngine(
         overrides=parse_overrides(settings.permissions.overrides),
         grants=dict(settings.permissions.grants),
@@ -279,6 +283,38 @@ def check_extensions(settings: Settings) -> Check:
     return Check("Skills e MCP", Status.OK, detalhe)
 
 
+def check_web_access(_: Settings) -> Check:
+    """Pesquisa e navegador."""
+    from eve.secrets import build_store
+
+    store = build_store(paths().ensure().home / "secrets.json")
+    partes, faltando = [], []
+
+    if store.has("TAVILY_API_KEY"):
+        partes.append("pesquisa")
+    else:
+        faltando.append("TAVILY_API_KEY")
+
+    try:
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            caminho = p.chromium.executable_path
+        if caminho and Path(caminho).exists():
+            partes.append("navegador")
+        else:
+            faltando.append("Chromium (rode `playwright install chromium`)")
+    except Exception:
+        faltando.append("Playwright")
+
+    if faltando:
+        detalhe = f"falta {', '.join(faltando)}"
+        if partes:
+            detalhe = f"{' e '.join(partes)} ok; {detalhe}"
+        return Check("Web e navegador", Status.WARN, detalhe)
+    return Check("Web e navegador", Status.OK, " e ".join(partes))
+
+
 def check_voice(_: Settings) -> Check:
     from eve.secrets import build_store
 
@@ -351,6 +387,7 @@ CHECKS: list[CheckFn] = [
     check_providers,
     check_memory_store,
     check_voice,
+    check_web_access,
     check_extensions,
     check_web,
     check_ollama,

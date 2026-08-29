@@ -53,6 +53,8 @@ async def status(request: Request) -> dict[str, Any]:
             "ai_external": (
                 "ativo" if app.state.secrets.has("OPENROUTER_API_KEY") else "sem credencial"
             ),
+            "browser": "aberto" if app.state.browser.open else "pronto",
+            "web": "ativo" if app.state.search is not None else "sem credencial",
             "voice": (
                 "ativo"
                 if app.state.secrets.has("DEEPGRAM_API_KEY")

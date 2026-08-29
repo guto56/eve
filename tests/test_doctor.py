@@ -51,7 +51,7 @@ def test_port_check_reports_free_port(settings: Settings) -> None:
 
 def test_run_checks_returns_every_check(settings: Settings) -> None:
     results = run_checks(settings)
-    assert len(results) == 16
+    assert len(results) == 17
     assert {"Python", "Core", "Porta", "Configuração"} <= {c.name for c in results}
 
 
@@ -81,7 +81,7 @@ def test_tools_check_counts_builtin_tools(settings: Settings) -> None:
 
     result = check_tools(settings)
     assert result.status is Status.OK
-    assert "27 nativa" in result.detail
+    assert "37 nativa" in result.detail
 
 
 def test_tools_check_warns_about_blocked_tools(settings: Settings) -> None:

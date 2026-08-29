@@ -93,6 +93,7 @@ def _send(
     nova_sessao = session
     inicio = time.perf_counter()
     primeiro: float | None = None
+    fontes: list[str] = []
 
     with _ApprovalWatcher(base, auto_yes):
         with httpx.stream("POST", f"{base}/api/chat", json=payload, timeout=600.0) as response:
@@ -118,6 +119,8 @@ def _send(
                     console.print(f"[magenta]→ {evento['name']}[/magenta][dim]{args}[/dim]")
                 elif kind == "tool_result" and not evento["ok"]:
                     console.print(f"[red]  {evento['error_kind']}: {evento['error']}[/red]")
+                elif kind == "tool_result" and evento["name"] == "web.search":
+                    fontes.extend((evento.get("value") or {}).get("sources") or [])
                 elif kind == "delta":
                     if primeiro is None:
                         primeiro = (time.perf_counter() - inicio) * 1000
@@ -128,6 +131,8 @@ def _send(
                     err_console.print(f"[red]{tipo}:[/red] {evento['error']}")
                 elif kind == "done":
                     console.print()
+                    for fonte in dict.fromkeys(fontes):
+                        console.print(f"[dim]  {fonte}[/dim]")
                     if verbose:
                         console.print(
                             f"[dim]{evento.get('duration_ms', 0):.0f} ms"
