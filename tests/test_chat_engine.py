@@ -245,3 +245,18 @@ async def test_so_conversa_gera_memoria(engine: ChatEngine, fake_providers) -> N
     await collect(engine, "oi, tudo bem?")
     await engine.drain()
     memoria.extract.assert_awaited()
+
+
+async def test_chamada_invalida_repetida_e_recusada(
+    engine: ChatEngine, fake_providers, sandbox
+) -> None:
+    """Regressão: `memory.recall` com limite inválido virou laço até estourar
+    as rodadas, sem resposta nenhuma para o usuário."""
+    ruim = ToolCall("eve.echo", {})  # falta `message`, já registrada pela fixture
+    fake_providers.fake.queue.append(reply("COMMAND"))
+    for _ in range(8):
+        fake_providers.fake.queue.append(reply("", [ruim]))
+
+    eventos = await collect(engine, "faça algo que vai dar errado sempre")
+    tentativas = [e for e in eventos if e.kind == "tool"]
+    assert len(tentativas) == 2  # tentou duas vezes; depois nem chamou

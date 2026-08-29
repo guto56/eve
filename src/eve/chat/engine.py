@@ -42,11 +42,13 @@ from eve.logging import get_logger
 from eve.router.router import Router, RoutingDecision
 from eve.router.routes import Route
 from eve.tools.bus import ToolBus
+from eve.tools.retry import MAX_REPETICOES, assinatura, payload, recusa
 from eve.tools.spec import ToolResult
 
 log = get_logger(__name__)
 
-MAX_TOOL_ROUNDS = 4
+MAX_TOOL_ROUNDS = 5
+"""Uma a mais do que o necessário, para caber uma recuperação de erro."""
 
 #: Só se extrai memória de CONVERSA.
 #:
@@ -110,6 +112,16 @@ class ChatEngine:
         yield ChatEvent("session", {"session": session.id})
 
         decision = await self.router.route(text)
+        log.info(
+            "router.decidiu",
+            rota=decision.route.value,
+            por=decision.decided_by,
+            regra=decision.rule,
+            ms=round(decision.latency_ms, 1),
+            ferramentas=len(decision.tools),
+            rapido=decision.is_fast_path,
+            texto=text[:80],
+        )
         await self.bus.emit(
             EventType.ROUTER_DECIDED, source=source, session=session.id, **decision.as_dict()
         )
@@ -324,6 +336,7 @@ class ChatEngine:
             *session.history(),
         ]
         ultimo: tuple[ToolCall, ToolResult] | None = None
+        falhas: dict[str, int] = {}
 
         for round_index in range(self.max_rounds):
             texto, chamadas = "", []
@@ -361,13 +374,28 @@ class ChatEngine:
                 return
 
             for call in chamadas:
+                marca = assinatura(call.name, call.arguments)
+                if falhas.get(marca, 0) >= MAX_REPETICOES:
+                    # Insistir na mesma chamada inválida só queima rodadas.
+                    messages.append(tool_result(call, recusa(call.name)))
+                    continue
+
                 yield ChatEvent("tool", {"name": call.name, "arguments": call.arguments})
                 result = await self.tools.call(
                     call.name, call.arguments, source=source, caller="modelo"
                 )
                 yield ChatEvent("tool_result", _result_event(call, result))
+                if not result.ok:
+                    log.info(
+                        "ferramenta.falhou",
+                        tool=call.name,
+                        kind=result.error_kind,
+                        erro=str(result.error)[:120],
+                    )
                 ultimo = (call, result)
-                mensagem = tool_result(call, _tool_payload(result))
+                if not result.ok:
+                    falhas[marca] = falhas.get(marca, 0) + 1
+                mensagem = tool_result(call, payload(result, falhas.get(marca, 0), limite=4000))
                 session.add(mensagem)
                 messages.append(mensagem)
 
@@ -379,13 +407,6 @@ async def _drain(fila: asyncio.Queue[dict[str, Any] | None]) -> AsyncIterator[di
         if evento is None:
             return
         yield evento
-
-
-def _tool_payload(result: ToolResult) -> str:
-    """O que o modelo vê de volta. Erro entra como texto, não como exceção."""
-    if result.ok:
-        return json.dumps(result.value, ensure_ascii=False, default=str)[:4000]
-    return json.dumps({"erro": result.error, "tipo": result.error_kind}, ensure_ascii=False)
 
 
 def _result_event(call: ToolCall, result: ToolResult) -> dict[str, Any]:

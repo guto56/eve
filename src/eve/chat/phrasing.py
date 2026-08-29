@@ -113,6 +113,40 @@ def _memoria_esquecida(_: dict[str, Any], value: Any) -> str:
     return f"Esqueci {count} memória(s)."
 
 
+def _sobre(args: dict[str, Any], value: Any) -> str:
+    topico = value.get("topic") or args.get("topic") or "capacidades"
+
+    if topico == "comandos":
+        linhas = "\n".join(f"  {cmd:34} {oq}" for cmd, oq in value["comandos"].items())
+        return (
+            f"Já estou rodando — a interface está em {value['interface']}.\n\n"
+            f"Pelo terminal:\n{linhas}"
+        )
+
+    grupos = value.get("capacidades") or {}
+    total = sum(len(v) for v in grupos.values())
+
+    if topico == "identidade":
+        return f"Sou {value['sou']}\n\nAgora com {total} ferramentas à disposição."
+
+    destaques = {
+        "app": "abrir e fechar aplicativos",
+        "file": "ler, escrever, mover e mandar arquivos para a Lixeira",
+        "web": "pesquisar na internet com fontes",
+        "browser": "navegar e interagir com páginas",
+        "memory": "lembrar do que você me conta",
+        "system": "volume, notificações, captura de tela e informações do Mac",
+        "clipboard": "área de transferência",
+    }
+    linhas = "\n".join(f"  · {texto}" for chave, texto in destaques.items() if chave in grupos)
+    extras = sorted(set(grupos) - set(destaques) - {"eve", "url"})
+    if extras:
+        linhas += f"\n  · e o que vem das extensões: {_lista(extras)}"
+    return (
+        f"Posso:\n{linhas}\n\nSão {total} ferramentas no total. `eve --help` mostra como me operar."
+    )
+
+
 def _template(texto: str) -> Formatter:
     def formatter(args: dict[str, Any], value: Any) -> str:
         dados = {**args, **(value if isinstance(value, dict) else {})}
@@ -145,6 +179,7 @@ FORMATTERS: dict[str, Formatter] = {
     "clipboard.read": _clipboard,
     "system.info": _info,
     "file.list": _listagem,
+    "eve.about": _sobre,
     "memory.remember": _memoria_gravada,
     "memory.recall": _memoria_lembrada,
     "memory.list": _memoria_lembrada,

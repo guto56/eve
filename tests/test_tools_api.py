@@ -11,7 +11,7 @@ from eve.paths import paths
 def test_list_tools() -> None:
     with TestClient(create_app()) as client:
         data = client.get("/api/tools").json()
-    assert data["count"] == 37
+    assert data["count"] == 38
     assert data["namespaces"] == [
         "app",
         "browser",
@@ -109,6 +109,6 @@ def test_permissions_endpoint_and_reload(isolated_home: Path) -> None:
 def test_status_counts_tools() -> None:
     with TestClient(create_app()) as client:
         data = client.get("/api/status").json()
-    assert data["tools"]["count"] == 37
+    assert data["tools"]["count"] == 38
     assert data["components"]["tools"] == "ativo"
     assert data["tools"]["pending_approvals"] == 0

@@ -83,13 +83,22 @@ LOOKS_LIKE_URL = re.compile(r"^(https?://|www\.)|\.[a-z]{2,}(/|$)")
 #: Palavras que, no começo do alvo, indicam arquivo/pasta e não aplicativo.
 FILE_WORDS = ("pasta ", "arquivo ", "diretorio ", "folder ", "file ")
 
+#: Um nome de aplicativo não começa com preposição nem com demonstrativo.
+#: "abre no navegador" não pede um app chamado "no navegador"; "abre essa
+#: pasta" não pede um app chamado "essa pasta". Os dois aconteceram.
+NAO_E_NOME = re.compile(
+    r"^(no|na|nos|nas|em|de|do|da|dos|das|com|para|pra|pelo|pela"
+    r"|esse|essa|esses|essas|este|esta|isso|aquilo|aquele|aquela"
+    r"|meu|minha|meus|minhas|seu|sua)\b"
+)
+
 
 def _open_target(match: re.Match[str]) -> dict[str, Any] | None:
     alvo = match.group("alvo").strip()
     if not alvo or len(alvo) > 120:
         return None
-    if alvo.startswith(FILE_WORDS):
-        return None  # é sobre arquivo: deixa o modelo decidir a ferramenta
+    if alvo.startswith(FILE_WORDS) or NAO_E_NOME.match(alvo):
+        return None  # não é nome de app: deixa o modelo decidir
     return {"name": alvo}
 
 
@@ -100,6 +109,43 @@ def _open_url(match: re.Match[str]) -> dict[str, Any] | None:
     if not urlparse(alvo).scheme:
         alvo = f"https://{alvo}"
     return {"url": alvo}
+
+
+#: Pastas do macOS que a EVE resolve sozinha, em português e em inglês.
+PASTAS_CONHECIDAS: dict[str, str] = {
+    "downloads": "~/Downloads",
+    "documentos": "~/Documents",
+    "documents": "~/Documents",
+    "area de trabalho": "~/Desktop",
+    "desktop": "~/Desktop",
+    "imagens": "~/Pictures",
+    "fotos": "~/Pictures",
+    "pictures": "~/Pictures",
+    "musicas": "~/Music",
+    "music": "~/Music",
+    "filmes": "~/Movies",
+    "videos": "~/Movies",
+    "movies": "~/Movies",
+    "aplicativos": "/Applications",
+    "applications": "/Applications",
+    "lixeira": "~/.Trash",
+}
+
+
+def _folder_path(match: re.Match[str]) -> dict[str, Any] | None:
+    """Resolve o alvo em caminho, ou desiste.
+
+    Um nome solto não é um caminho: "pasta EVE" pode estar em qualquer lugar.
+    A regra só resolve o que é inequívoco — caminho explícito ou pasta padrão
+    do macOS. O resto vai para o modelo, que tem contexto para adivinhar.
+    """
+    alvo = match.group("texto").strip().strip("\"'")
+    if not alvo or len(alvo) > 200:
+        return None
+    if alvo.startswith(("~", "/", "./")):
+        return {"path": alvo}
+    conhecida = PASTAS_CONHECIDAS.get(strip_accents(alvo.lower()))
+    return {"path": conhecida} if conhecida else None
 
 
 def _volume_level(match: re.Match[str]) -> dict[str, Any] | None:
@@ -208,6 +254,31 @@ RULES: tuple[Rule, ...] = (
     ),
     # --- sistema
     rule(
+        "sobre_a_eve_comandos",
+        r"^(como (rodar|usar|iniciar|operar|ligar|parar|reiniciar) (o |a )?eve"
+        r"|quais (sao )?(os )?(seus )?comandos"
+        r"|como (eu )?(te )?(uso|opero|controlo))",
+        Route.COMMAND,
+        "eve.about",
+        lambda _: {"topic": "comandos"},
+    ),
+    rule(
+        "sobre_a_eve_identidade",
+        r"^(quem (e|es|é) (voce|vc|tu)|o que (voce|vc) e$|voce e (um|uma) (o que|que))",
+        Route.COMMAND,
+        "eve.about",
+        lambda _: {"topic": "identidade"},
+    ),
+    rule(
+        "sobre_a_eve",
+        r"^(o que (voce|vc|tu) (faz|sabe fazer|pode fazer|consegue fazer)"
+        r"|quais (sao )?(as )?suas (capacidades|funcoes|ferramentas)"
+        r"|no que (voce|vc) pode (me )?ajudar)",
+        Route.COMMAND,
+        "eve.about",
+        lambda _: {"topic": "capacidades"},
+    ),
+    rule(
         "hora",
         r"^(que horas sao|qual (e )?a hora|what time is it|me diga as horas)",
         Route.COMMAND,
@@ -230,6 +301,15 @@ RULES: tuple[Rule, ...] = (
         Route.COMMAND,
         "clipboard.write",
         _clipboard_text,
+    ),
+    rule(
+        "listar_pasta",
+        r"^(o que (tem|temos|ha|existe)|quais (arquivos|itens)|liste|listar|mostre)"
+        r"\s+(tem\s+)?(na|no|em|os arquivos (da|do)|dentro (da|do))\s+"
+        r"(pasta\s+|diretorio\s+)?(?P<texto>.+)$",
+        Route.COMMAND,
+        "file.list",
+        _folder_path,
     ),
     rule(
         "ler_clipboard",
@@ -308,9 +388,18 @@ def _restore_originals(
         ("text", "texto"),
         ("content", "texto"),
         ("query", "texto"),
+        ("path", "texto"),
     ):
-        if key in restored and group in match.groupdict():
-            recorte = _original_span(original, match, group)
-            if recorte:
-                restored[key] = recorte
+        if key not in restored or group not in match.groupdict():
+            continue
+        recorte = _original_span(original, match, group)
+        # Só restaura quando o valor É o texto casado, apenas normalizado.
+        # Se a regra computou outra coisa — uma pasta padrão resolvida a
+        # partir de "Downloads", por exemplo — o computado é que vale.
+        if recorte and _mesma_coisa(str(restored[key]), match.group(group)):
+            restored[key] = recorte
     return restored
+
+
+def _mesma_coisa(valor: str, casado: str) -> bool:
+    return strip_accents(valor.lower()).strip() == strip_accents(casado.lower()).strip()

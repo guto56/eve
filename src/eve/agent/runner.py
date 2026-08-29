@@ -33,19 +33,15 @@ from eve.ai.manager import ProviderManager
 from eve.bus import EventBus
 from eve.logging import get_logger
 from eve.tools.bus import ToolBus
-from eve.tools.spec import ToolResult
+from eve.tools.retry import MAX_REPETICOES
+from eve.tools.retry import assinatura as _assinatura
+from eve.tools.retry import payload as _payload
+from eve.tools.retry import recusa as _recusa
 
 log = get_logger(__name__)
 
 MAX_ROUNDS = 12
 """Orçamento de rodadas. Uma tarefa que não termina em doze não vai terminar."""
-
-MAX_REPETICOES = 2
-"""Quantas vezes a mesma chamada pode falhar antes de a EVE recusar repeti-la.
-
-Avisar no texto não resolve: numa execução real o modelo repetiu a mesma
-chamada inválida sete vezes, ignorando o aviso a cada volta. A recusa é
-estrutural — a chamada nem chega à ferramenta."""
 
 MAX_RODADAS_ESTEREIS = 3
 """Rodadas seguidas sem nenhum passo bem-sucedido antes de desistir."""
@@ -233,45 +229,6 @@ class AgentRunner:
                 task.finish(TaskStatus.FAILED, error=aviso)
                 yield {"kind": "delta", "text": aviso}
                 return
-
-
-def _recusa(tool: str) -> str:
-    return json.dumps(
-        {
-            "erro": f"{tool} já falhou com esses mesmos argumentos e não foi chamada de novo.",
-            "tipo": "repeticao_recusada",
-            "atencao": "Mude os argumentos ou use outra ferramenta. Insistir não vai funcionar.",
-        },
-        ensure_ascii=False,
-    )
-
-
-def _assinatura(tool: str, argumentos: dict[str, Any]) -> str:
-    return f"{tool}:{json.dumps(argumentos, sort_keys=True, default=str)}"
-
-
-def _payload(resultado: ToolResult, repeticoes: int = 0) -> str:
-    """O que o modelo vê de volta.
-
-    Quando a mesma chamada falha de novo, o resultado vem com um aviso
-    explícito. Sem isso o modelo insiste: numa execução real ele repetiu
-    `browser.open` sem argumentos sete vezes seguidas, queimando o orçamento
-    de rodadas em erros idênticos.
-    """
-    if resultado.ok:
-        return json.dumps(resultado.value, ensure_ascii=False, default=str)[:6000]
-    corpo: dict[str, Any] = {"erro": resultado.error, "tipo": resultado.error_kind}
-    if repeticoes >= 2:
-        corpo["atencao"] = (
-            "Esta mesma chamada já falhou antes. NÃO repita: mude os argumentos "
-            "ou use outra ferramenta."
-        )
-    if resultado.error_kind == "denied":
-        corpo["atencao"] = (
-            "A ação precisa de autorização do usuário e não foi autorizada. "
-            "Siga por um caminho que não exija confirmação."
-        )
-    return json.dumps(corpo, ensure_ascii=False)
 
 
 _ARRAY = re.compile(r"\[.*\]", re.DOTALL)

@@ -11,7 +11,7 @@ import platform
 import subprocess
 import time
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -19,6 +19,35 @@ from eve import __version__
 from eve.tools.registry import ToolRegistry
 from eve.tools.registry import tool as tool_decorator
 from eve.tools.spec import NoParams, RiskLevel, ToolContext, ToolParams
+
+#: O que a EVE responde quando perguntam o que ela é ou como usá-la.
+#: Sem isto ela inventa: perguntada "como rodar o EVE?", respondeu
+#: "uv run fastapi dev" — plausível, genérico e errado.
+COMANDOS: dict[str, str] = {
+    "eve start | stop | restart": "liga, desliga e reinicia a EVE",
+    "eve status": "estado do sistema",
+    "eve doctor": "diagnóstico completo da instalação",
+    "eve chat [mensagem]": "conversa (sem mensagem, abre um REPL)",
+    "eve web": "abre a interface no navegador",
+    "eve memory list | search | add | forget": "memória",
+    "eve tool list | call | audit": "ferramentas e auditoria",
+    "eve permission list | set | grant": "permissões",
+    "eve skill list | install": "Skills",
+    "eve mcp list | add": "servidores MCP",
+    "eve task list | show | cancel": "tarefas de agente",
+    "eve watch add | list | status": "o que ela observa",
+    "eve voice say | test": "voz",
+    "eve key list | set | import": "credenciais no Keychain",
+    "eve logs [-f]": "logs",
+}
+
+
+class AboutParams(ToolParams):
+    topic: Literal["identidade", "capacidades", "comandos"] = Field(
+        default="capacidades",
+        description="identidade = o que ela é; capacidades = o que sabe fazer; "
+        "comandos = como operá-la.",
+    )
 
 
 class EchoParams(ToolParams):
@@ -60,6 +89,50 @@ def register_builtin_tools(registry: ToolRegistry) -> ToolRegistry:
             "utc": datetime.now(UTC).isoformat(),
             "timezone": str(now.tzinfo),
             "epoch": time.time(),
+        }
+
+    @tool_decorator(
+        "eve.about",
+        description="O que a EVE é, o que ela sabe fazer e como operá-la.",
+        params=AboutParams,
+        risk=RiskLevel.SAFE,
+        registry=registry,
+        keywords=(
+            "eve",
+            "voce",
+            "vc",
+            "quem",
+            "capacidade",
+            "consegue",
+            "sabe",
+            "ajuda",
+            "comando",
+            "rodar",
+            "usar",
+            "funciona",
+        ),
+    )
+    async def about(params: AboutParams, ctx: ToolContext) -> dict[str, Any]:
+        por_grupo: dict[str, list[str]] = {}
+        for spec in registry:
+            por_grupo.setdefault(spec.namespace, []).append(spec.name.split(".", 1)[1])
+        return {
+            "topic": params.topic,
+            "sou": (
+                "a EVE, assistente pessoal que roda neste Mac. Local-first: "
+                "modelo local para conversa e roteamento, modelo externo para "
+                "tarefas complexas, memória e credenciais no próprio computador."
+            ),
+            "versao": __version__,
+            "capacidades": {grupo: sorted(nomes) for grupo, nomes in sorted(por_grupo.items())},
+            "comandos": COMANDOS,
+            "onde_moro": {
+                "configuracao": "~/.eve/config.toml",
+                "memoria": "~/.eve/data/eve.db",
+                "logs": "~/.eve/logs/",
+                "skills": "~/.eve/skills/",
+            },
+            "interface": f"http://{ctx.settings.server.host}:{ctx.settings.server.port}",
         }
 
     @tool_decorator(

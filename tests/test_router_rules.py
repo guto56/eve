@@ -148,3 +148,53 @@ def test_memory_rules_preserve_the_original_text(texto: str, tool: str, args: di
 
 def test_memory_rule_declines_when_there_is_no_fact() -> None:
     assert apply_rules("lembre disso") is None
+
+
+@pytest.mark.parametrize(
+    "texto",
+    ["abre no navegador", "abre essa pasta", "abra este arquivo", "abra o meu projeto"],
+)
+def test_preposicao_e_demonstrativo_nao_sao_nome_de_app(texto: str) -> None:
+    """Regressão: virava `app.open{"name": "no navegador"}` e falhava."""
+    hit = apply_rules(texto)
+    assert hit is None or hit.tool != "app.open"
+
+
+@pytest.mark.parametrize(
+    ("texto", "caminho"),
+    [
+        ("o que tem no Downloads", "~/Downloads"),
+        ("quais arquivos tem na pasta Documentos", "~/Documents"),
+        ("o que tem na área de trabalho", "~/Desktop"),
+        ("o que tem em ~/Documents/EVE", "~/Documents/EVE"),
+    ],
+)
+def test_listar_pasta_resolve_o_que_e_inequivoco(texto: str, caminho: str) -> None:
+    hit = apply_rules(texto)
+    assert hit is not None, texto
+    assert hit.tool == "file.list"
+    assert hit.arguments == {"path": caminho}
+
+
+@pytest.mark.parametrize("texto", ["o que tem na pasta EVE", "o que temos na pasta do projeto"])
+def test_pasta_ambigua_vai_para_o_modelo(texto: str) -> None:
+    """Um nome solto não é caminho: pode estar em qualquer lugar."""
+    assert apply_rules(texto) is None
+
+
+@pytest.mark.parametrize(
+    ("texto", "topico"),
+    [
+        ("quem é você?", "identidade"),
+        ("o que você faz?", "capacidades"),
+        ("o que você pode fazer", "capacidades"),
+        ("como rodar o EVE?", "comandos"),
+        ("como eu te uso", "comandos"),
+    ],
+)
+def test_perguntas_sobre_a_propria_eve(texto: str, topico: str) -> None:
+    """Regressão: perguntada como rodá-la, a EVE inventava `uv run fastapi dev`."""
+    hit = apply_rules(texto)
+    assert hit is not None, texto
+    assert hit.tool == "eve.about"
+    assert hit.arguments == {"topic": topico}

@@ -7,7 +7,7 @@ from eve.tools.registry import ToolRegistry
 
 def test_builtin_tools_are_registered() -> None:
     registry = register_builtin_tools(ToolRegistry())
-    assert registry.names() == ["eve.echo", "system.info", "system.time"]
+    assert registry.names() == ["eve.about", "eve.echo", "system.info", "system.time"]
     assert all(spec.risk.value == "safe" for spec in registry)
 
 
