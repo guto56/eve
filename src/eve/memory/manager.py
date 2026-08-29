@@ -35,6 +35,12 @@ certamente repetido. Fundir "marque meus encontros cedo" com "prefiro almoçar
 MIN_IMPORTANCE = 0.25
 """Abaixo disto não vale ocupar espaço nem contexto."""
 
+MIN_IMPORTANCE_EXTRACAO = 0.5
+"""Exigência maior para o que a EVE decide guardar sozinha.
+
+Quando o usuário manda guardar, a intenção basta. Quando a EVE decide, o
+custo do erro é dela: memória inútil disputa espaço de contexto com a útil."""
+
 EXTRACTION_SYSTEM = """Você extrai fatos duradouros de uma conversa, para a memória
 de um assistente pessoal.
 
@@ -200,6 +206,8 @@ class MemoryManager:
 
         gravadas = []
         for item in _parse_items(resposta.text):
+            if float(item.get("importance", 0.5)) < MIN_IMPORTANCE_EXTRACAO:
+                continue
             try:
                 memoria, estado = await self.remember(
                     item["content"],

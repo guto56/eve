@@ -48,6 +48,9 @@ log = get_logger(__name__)
 
 MAX_TOOL_ROUNDS = 4
 
+#: Rotas de onde não se extrai memória automaticamente.
+SEM_EXTRACAO = frozenset({Route.MEMORY, Route.COMMAND})
+
 
 @dataclass
 class ChatEvent:
@@ -145,11 +148,16 @@ class ChatEngine:
             return
         if len(session.messages) < 2:
             return
-        if decision.route is Route.MEMORY:
-            # O usuário já disse o que queria guardar e a EVE guardou. Extrair
-            # de novo geraria uma segunda cópia do mesmo fato, reescrita —
-            # parecida demais para ser útil, diferente demais para o
+        if decision.route in SEM_EXTRACAO:
+            # MEMORY: o usuário já disse o que queria guardar e a EVE guardou;
+            # extrair de novo geraria uma segunda cópia reescrita do mesmo
+            # fato — parecida demais para ser útil, diferente demais para o
             # deduplicador reconhecer.
+            #
+            # COMMAND: pedir uma ação não é contar algo sobre si. Sem este
+            # corte, "escreva oi nesse arquivo" virava a memória "o usuário
+            # solicitou que um texto fosse salvo em um arquivo" — ruído que
+            # depois disputa espaço no contexto com o que importa.
             return
         tarefa = asyncio.create_task(self._extract(session))
         self._extracoes.add(tarefa)

@@ -18,7 +18,7 @@ from eve.ai.manager import ProviderManager
 from eve.bus import EventBus
 from eve.chat.engine import ChatEngine
 from eve.config import Settings, load_settings
-from eve.daemon.routes import ai, chat, health, memory, tools, ws
+from eve.daemon.routes import ai, chat, health, memory, tools, web, ws
 from eve.events import EventType
 from eve.logging import get_logger
 from eve.memory.embeddings import Embedder
@@ -93,6 +93,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(ai.router)
     app.include_router(chat.router)
     app.include_router(memory.router)
+    # A interface é montada por último: sua rota curinga não pode capturar
+    # nada da API.
+    web.mount(app)
     return app
 
 

@@ -2,7 +2,18 @@
 
 Assistente pessoal de IA local-first para macOS.
 
-Estado: **Fase 6 concluída** — a EVE conversa, age no Mac e lembra. Veja [docs/PLANO.md](docs/PLANO.md).
+Estado: **Fase 7 concluída** — a EVE conversa, age no Mac, lembra e tem interface web. Veja [docs/PLANO.md](docs/PLANO.md).
+
+```bash
+eve start && eve web
+```
+
+## Interface
+
+```bash
+cd ui && npm install && npm run build   # sai em src/eve/web/static
+cd ui && npm run dev                     # desenvolvimento, com proxy para o Core
+```
 
 ## Desenvolvimento
 

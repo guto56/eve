@@ -250,6 +250,19 @@ def check_memory_store(settings: Settings) -> Check:
     return Check("Memória da EVE", Status.OK, f"{detalhe}, busca híbrida ativa")
 
 
+def check_web(_: Settings) -> Check:
+    from eve.web import STATIC, is_built
+
+    if not is_built():
+        return Check(
+            "Interface web",
+            Status.WARN,
+            "não construída — rode `cd ui && npm install && npm run build`",
+        )
+    bytes_total = sum(f.stat().st_size for f in STATIC.rglob("*") if f.is_file())
+    return Check("Interface web", Status.OK, f"pronta ({bytes_total / 1024:.0f} KB)")
+
+
 def check_disk(_: Settings) -> Check:
     usage = shutil.disk_usage(paths().home.parent)
     free_gb = usage.free / 1024**3
@@ -294,6 +307,7 @@ CHECKS: list[CheckFn] = [
     check_secrets,
     check_providers,
     check_memory_store,
+    check_web,
     check_ollama,
 ]
 

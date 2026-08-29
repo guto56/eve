@@ -28,3 +28,6 @@ logs/
 
 # macOS
 .DS_Store
+
+# build da interface é versionado de propósito (instalação sem Node)
+!src/eve/web/static/

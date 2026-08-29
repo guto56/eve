@@ -35,7 +35,7 @@ Restrição dominante do alvo: **Apple M1, 8 GB de RAM**. Nada de modelo local a
 | 4 | Secrets + Providers | Keychain, migração do `env.txt`, cliente Ollama, cliente OpenRouter | **concluída** |
 | 5 | Router + chat | classificação de intenção, streaming ponta a ponta local↔externo | **concluída** |
 | 6 | Memória | SQLite + FTS5 + sqlite-vec, 4 camadas, Memory Manager | **concluída** |
-| 7 | Interface web | React/Vite, chat, estados, tarefas, tools ao vivo | |
+| 7 | Interface web | React/Vite, chat, estados, tarefas, tools ao vivo | **concluída** |
 | 8 | Voz | Deepgram STT streaming, Cartesia TTS, VAD, barge-in, wake word | |
 | 9 | Skills + MCP | instalar/remover/ativar Skills; cliente MCP no Tool Bus | |
 | 10 | Web + navegador | Tavily, Playwright como Tool | |
