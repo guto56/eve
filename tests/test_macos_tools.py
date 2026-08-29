@@ -408,3 +408,15 @@ def test_nao_achar_vem_com_alternativas() -> None:
     alvo = resolve("xyzqualquercoisa7742")
     assert alvo.kind == "unknown"
     assert "não achei" in alvo.note
+
+
+def test_palavra_generica_nao_rouba_o_pedido() -> None:
+    """Regressão: "app", vindo de "App Store", casava como substring de
+    "whatsapp" — e pedir o WhatsApp abria a App Store."""
+    from eve.macos.resolve import resolve
+
+    assert resolve("WhatsApp").kind == "web"
+    assert resolve("whatsapp").value == "https://web.whatsapp.com"
+    # E o que era certo continua certo.
+    assert resolve("appstore").value == "App Store"
+    assert resolve("chrome").value == "Google Chrome"

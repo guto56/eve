@@ -53,8 +53,10 @@ class App:
             limpo = termo.removesuffix(".app")
             chaves.add(normalizar(limpo))
             # Palavras soltas: "Google Chrome" também atende por "chrome".
+            # Palavra curta não discrimina — "app", de "App Store", casava
+            # como substring de "whatsapp" e roubava o pedido.
             for palavra in re.split(r"[\s\-_]+", limpo):
-                if len(palavra) >= 3:
+                if len(palavra) >= 4:
                     chaves.add(normalizar(palavra))
         return {c for c in chaves if c}
 
@@ -269,7 +271,12 @@ def _pontuar(alvo: str, chave: str) -> float:
         cobertura = min(len(alvo), len(chave)) / max(len(alvo), len(chave))
         return 0.90 + 0.09 * cobertura
     if alvo in chave or chave in alvo:
-        return 0.82
+        # Conter não basta: "app" está dentro de "whatsapp" e não quer dizer
+        # nada. O pedaço precisa ser metade do todo para contar.
+        cobertura = min(len(alvo), len(chave)) / max(len(alvo), len(chave))
+        if cobertura < 0.5:
+            return 0.0
+        return 0.70 + 0.15 * cobertura
     # Erro de digitação. Exige semelhança alta: "chorme" tem de virar
     # "chrome", não "home".
     parecido = difflib.SequenceMatcher(None, alvo, chave).ratio()
