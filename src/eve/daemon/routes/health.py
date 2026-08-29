@@ -53,6 +53,12 @@ async def status(request: Request) -> dict[str, Any]:
             "ai_external": (
                 "ativo" if app.state.secrets.has("OPENROUTER_API_KEY") else "sem credencial"
             ),
+            "voice": (
+                "ativo"
+                if app.state.secrets.has("DEEPGRAM_API_KEY")
+                and app.state.secrets.has("CARTESIA_API_KEY")
+                else "sem credencial"
+            ),
         },
         "memory": {
             "total": await app.state.memory.store.count(),

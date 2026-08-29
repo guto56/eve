@@ -3,7 +3,8 @@ import { ApprovalCard, Empty, Panel, TurnView } from "./components";
 import { useEve } from "./useEve";
 
 export default function App() {
-  const { turns, connected, busy, approvals, status, send, decide, reset } = useEve();
+  const { turns, connected, busy, approvals, status, send, decide, reset, voice, toggleVoice } =
+    useEve();
   const [rascunho, setRascunho] = useState("");
   const [detalhes, setDetalhes] = useState(false);
   const [painel, setPainel] = useState(false);
@@ -74,12 +75,38 @@ export default function App() {
       </main>
 
       <div className="composer">
+        {voice.active && (
+          <div className={`voicebar ${voice.speaking ? "falando" : ""}`}>
+            <span className={`wave ${voice.listening ? "on" : ""}`}>
+              <i /><i /><i />
+            </span>
+            <span className="heard">
+              {voice.speaking
+                ? "a EVE está falando — fale para interromper"
+                : voice.partial || "ouvindo…"}
+            </span>
+          </div>
+        )}
+        {voice.error && <div className="voice-error">{voice.error}</div>}
         <div className="field">
+          <button
+            className={`mic ${voice.active ? "on" : ""}`}
+            onClick={toggleVoice}
+            title={voice.active ? "Encerrar a voz" : "Falar com a EVE"}
+          >
+            {voice.active ? "■" : "●"}
+          </button>
           <textarea
             ref={campo}
             rows={1}
             value={rascunho}
-            placeholder={busy ? "a EVE está trabalhando…" : "Fale com a EVE"}
+            placeholder={
+              voice.active
+                ? "microfone aberto — pode falar"
+                : busy
+                  ? "a EVE está trabalhando…"
+                  : "Fale com a EVE"
+            }
             onChange={(e) => setRascunho(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === "Enter" && !e.shiftKey) {

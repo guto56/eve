@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, EveSocket, type ChatFrame } from "./api";
 import type { Approval, Routing, Status, Turn } from "./types";
+import { VoiceClient, type VoiceEvent } from "./voice";
 
 let seq = 0;
 const nextId = () => `t${++seq}`;
@@ -12,7 +13,15 @@ export function useEve() {
   const [busy, setBusy] = useState(false);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [status, setStatus] = useState<Status | null>(null);
+  const [voice, setVoice] = useState({
+    active: false,
+    listening: false,
+    speaking: false,
+    partial: "",
+    error: "",
+  });
   const socketRef = useRef<EveSocket | null>(null);
+  const voiceRef = useRef<VoiceClient | null>(null);
 
   const patchLast = useCallback((patch: (turn: Turn) => Turn) => {
     setTurns((current) => {
@@ -146,5 +155,95 @@ export function useEve() {
     setSession(null);
   }, []);
 
-  return { turns, connected, busy, approvals, status, send, decide, reset, session };
+  // ------------------------------------------------------------------ voz
+
+  const onVoiceEvent = useCallback(
+    (event: VoiceEvent) => {
+      switch (event.kind) {
+        case "partial":
+          setVoice((v) => ({ ...v, partial: event.text }));
+          break;
+        case "final":
+          // O que a EVE ouviu vira um turno igual ao que foi digitado.
+          setVoice((v) => ({ ...v, partial: "" }));
+          setTurns((current) => [
+            ...current,
+            { id: nextId(), role: "user", text: event.text, tools: [] },
+            { id: nextId(), role: "assistant", text: "", tools: [], streaming: true },
+          ]);
+          break;
+        case "tool":
+          patchLast((turn) => ({
+            ...turn,
+            tools: [
+              ...turn.tools,
+              { id: `${turn.id}-${turn.tools.length}`, name: event.name, arguments: {}, ok: true },
+            ],
+          }));
+          break;
+        case "reply":
+          patchLast((turn) => ({ ...turn, text: turn.text + event.text }));
+          break;
+        case "speaking":
+          setVoice((v) => ({ ...v, speaking: event.on }));
+          if (!event.on) patchLast((turn) => ({ ...turn, streaming: false }));
+          break;
+        case "listening":
+          setVoice((v) => ({ ...v, listening: event.on }));
+          break;
+        case "interrupted":
+          patchLast((turn) => ({ ...turn, streaming: false }));
+          break;
+        case "error":
+          setVoice((v) => ({ ...v, error: event.error }));
+          if (event.fatal) {
+            voiceRef.current?.stop();
+            setVoice((v) => ({ ...v, active: false }));
+          }
+          break;
+        case "closed":
+          setVoice({ active: false, listening: false, speaking: false, partial: "", error: "" });
+          break;
+      }
+    },
+    [patchLast],
+  );
+
+  const toggleVoice = useCallback(async () => {
+    if (voiceRef.current?.active) {
+      await voiceRef.current.stop();
+      voiceRef.current = null;
+      setVoice({ active: false, listening: false, speaking: false, partial: "", error: "" });
+      return;
+    }
+    const client = new VoiceClient(onVoiceEvent);
+    voiceRef.current = client;
+    try {
+      await client.start();
+      setVoice((v) => ({ ...v, active: true, error: "" }));
+    } catch (erro) {
+      voiceRef.current = null;
+      setVoice((v) => ({
+        ...v,
+        active: false,
+        error: erro instanceof Error ? erro.message : "não consegui abrir o microfone",
+      }));
+    }
+  }, [onVoiceEvent]);
+
+  useEffect(() => () => void voiceRef.current?.stop(), []);
+
+  return {
+    turns,
+    connected,
+    busy,
+    approvals,
+    status,
+    send,
+    decide,
+    reset,
+    session,
+    voice,
+    toggleVoice,
+  };
 }

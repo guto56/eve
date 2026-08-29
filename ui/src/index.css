@@ -308,6 +308,62 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 .send:disabled { opacity: 0.3; cursor: default; }
 
+/* -------------------------------------------------------------------- voz */
+
+.mic {
+  border: 1px solid var(--line);
+  background: none;
+  color: var(--text-faint);
+  width: 30px; height: 30px;
+  border-radius: 50%;
+  display: grid; place-items: center;
+  font-size: 11px;
+  flex-shrink: 0;
+  margin-bottom: 2px;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.mic:hover { color: var(--text); border-color: var(--accent-dim); }
+.mic.on {
+  background: var(--accent);
+  border-color: transparent;
+  color: #04120f;
+}
+
+.voicebar {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 9px 14px;
+  border: 1px solid var(--accent-dim);
+  border-radius: var(--radius);
+  background: var(--accent-glow);
+  font-size: 13.5px;
+}
+.voicebar.falando { border-color: var(--warn); background: color-mix(in oklab, var(--warn) 8%, transparent); }
+.voicebar .heard { color: var(--text-dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.wave { display: inline-flex; gap: 2.5px; align-items: flex-end; height: 15px; }
+.wave i {
+  width: 2.5px;
+  height: 4px;
+  background: var(--accent);
+  border-radius: 2px;
+  opacity: 0.4;
+}
+.wave.on i { animation: wave 1s ease-in-out infinite; opacity: 1; }
+.wave.on i:nth-child(2) { animation-delay: 0.15s; }
+.wave.on i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes wave {
+  0%, 100% { height: 4px; }
+  50% { height: 15px; }
+}
+
+.voice-error {
+  font-size: 12.5px;
+  color: var(--danger);
+  padding: 0 4px;
+}
+
 .hints {
   display: flex;
   gap: 7px;

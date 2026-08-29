@@ -2,7 +2,7 @@
 
 Assistente pessoal de IA local-first para macOS.
 
-Estado: **Fase 7 concluída** — a EVE conversa, age no Mac, lembra e tem interface web. Veja [docs/PLANO.md](docs/PLANO.md).
+Estado: **Fase 8 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra e tem interface web. Veja [docs/PLANO.md](docs/PLANO.md).
 
 ```bash
 eve start && eve web
@@ -55,6 +55,7 @@ uv run ruff check src tests
 | `eve ask "..." [-r papel]` | pergunta a um modelo, com streaming |
 | `eve chat [mensagem] [-v]` | conversa com a EVE (sem mensagem, abre um REPL) |
 | `eve memory list/search/add/forget/stats` | memória persistente |
+| `eve voice say "..."` · `eve voice test` | fala e diagnóstico de voz |
 
 ## Onde as coisas ficam
 
@@ -91,5 +92,6 @@ Configuração por ambiente: `EVE_SERVER__PORT=9000 eve start`.
 | `POST /api/route` | só a decisão de roteamento, sem executar |
 | `GET/DELETE /api/sessions` | sessões de conversa |
 | `GET/POST /api/memory` · `/search` · `/recent` | memória |
+| `WS /ws/voice` | microfone e fala (áudio binário nos dois sentidos) |
 
 No WebSocket o servidor envia `hello`, depois o histórico (`replay: true`) e então os eventos ao vivo. O cliente pode enviar `{"op":"ping"}` e `{"op":"subscribe","patterns":["voice.*"]}`.

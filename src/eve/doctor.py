@@ -250,6 +250,20 @@ def check_memory_store(settings: Settings) -> Check:
     return Check("Memória da EVE", Status.OK, f"{detalhe}, busca híbrida ativa")
 
 
+def check_voice(_: Settings) -> Check:
+    from eve.secrets import build_store
+
+    store = build_store(paths().ensure().home / "secrets.json")
+    faltando = [
+        nome
+        for nome in ("DEEPGRAM_API_KEY", "CARTESIA_API_KEY", "CARTESIA_VOICE_ID")
+        if not store.has(nome)
+    ]
+    if faltando:
+        return Check("Voz", Status.WARN, f"falta {', '.join(faltando)}")
+    return Check("Voz", Status.OK, "transcrição e fala configuradas")
+
+
 def check_web(_: Settings) -> Check:
     from eve.web import STATIC, is_built
 
@@ -307,6 +321,7 @@ CHECKS: list[CheckFn] = [
     check_secrets,
     check_providers,
     check_memory_store,
+    check_voice,
     check_web,
     check_ollama,
 ]

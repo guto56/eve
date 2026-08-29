@@ -68,6 +68,22 @@ class MemorySettings(BaseModel):
     """Extrair memórias das conversas automaticamente."""
 
 
+class VoiceSettings(BaseModel):
+    """Voz (spec §13)."""
+
+    stt_model: str = "nova-3"
+    stt_language: str = "pt-BR"
+    input_sample_rate: int = Field(default=16000, gt=0)
+    endpointing_ms: int = Field(default=300, ge=10, le=3000)
+
+    tts_model: str = "sonic-3"
+    tts_language: str = "pt"
+    output_sample_rate: int = Field(default=24000, gt=0)
+
+    barge_in: bool = True
+    """Interromper a fala da EVE quando o usuário começa a falar."""
+
+
 class PermissionSettings(BaseModel):
     """Política de permissões (spec §11).
 
@@ -99,6 +115,7 @@ class Settings(BaseSettings):
     permissions: PermissionSettings = PermissionSettings()
     files: FileSettings = FileSettings()
     memory: MemorySettings = MemorySettings()
+    voice: VoiceSettings = VoiceSettings()
 
     @classmethod
     def settings_customise_sources(

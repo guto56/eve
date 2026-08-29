@@ -17,6 +17,7 @@ dependencies = [
     "pyobjc-framework-applicationservices>=12.2.2",
     "keyring>=25.7.0",
     "sqlite-vec>=0.1.9",
+    "websockets>=17.1",
 ]
 
 [project.scripts]
