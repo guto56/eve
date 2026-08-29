@@ -226,3 +226,22 @@ async def test_explicit_memory_turn_does_not_trigger_extraction(
 
     memoria.remember.assert_awaited()
     memoria.extract.assert_not_awaited()
+
+
+async def test_so_conversa_gera_memoria(engine: ChatEngine, fake_providers) -> None:
+    """Pedir pesquisa ou tarefa não é contar algo sobre si."""
+    from unittest.mock import AsyncMock
+
+    memoria = AsyncMock()
+    memoria.context_for = AsyncMock(return_value="")
+    engine.memory = memoria
+
+    fake_providers.fake.queue.extend([reply("WEB"), reply("achei isso")])
+    await collect(engine, "descubra o preço do dólar agora mesmo")
+    await engine.drain()
+    memoria.extract.assert_not_awaited()
+
+    fake_providers.fake.queue.extend([reply("olá!")])
+    await collect(engine, "oi, tudo bem?")
+    await engine.drain()
+    memoria.extract.assert_awaited()

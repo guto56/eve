@@ -227,6 +227,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+.plan {
+  margin: 0;
+  padding: 11px 15px 11px 32px;
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--accent-dim);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  align-self: flex-start;
+  max-width: 92%;
+  font-size: 13px;
+  color: var(--text-dim);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.plan li::marker { color: var(--text-faint); }
+
 .sources {
   display: flex;
   flex-wrap: wrap;

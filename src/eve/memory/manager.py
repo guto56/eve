@@ -35,6 +35,9 @@ certamente repetido. Fundir "marque meus encontros cedo" com "prefiro almoçar
 MIN_IMPORTANCE = 0.25
 """Abaixo disto não vale ocupar espaço nem contexto."""
 
+MAX_POR_EXTRACAO = 3
+"""Teto por conversa. Oito memórias de uma troca não é aprendizado — é ruído."""
+
 MIN_IMPORTANCE_EXTRACAO = 0.5
 """Exigência maior para o que a EVE decide guardar sozinha.
 
@@ -204,8 +207,8 @@ class MemoryManager:
             log.warning("memoria.extracao_falhou", error=str(exc))
             return []
 
-        gravadas = []
-        for item in _parse_items(resposta.text):
+        gravadas: list[Memory] = []
+        for item in _parse_items(resposta.text)[:MAX_POR_EXTRACAO]:
             if float(item.get("importance", 0.5)) < MIN_IMPORTANCE_EXTRACAO:
                 continue
             try:
@@ -226,13 +229,14 @@ class MemoryManager:
 
 
 def _transcribe(messages: Sequence[Message]) -> str:
-    partes = []
-    for m in messages:
-        if m.role == "user":
-            partes.append(f"Usuário: {m.content}")
-        elif m.role == "assistant" and m.content:
-            partes.append(f"EVE: {m.content}")
-    return "\n".join(partes)
+    """Só o que o usuário disse.
+
+    Incluir as respostas da EVE fazia o extrator tratar as próprias conclusões
+    dela como fatos sobre o usuário: uma recomendação de fone virou "o usuário
+    valoriza a integração com o ecossistema Apple", que ninguém disse. A
+    instrução no prompt não bastava; a informação não pode nem chegar lá.
+    """
+    return "\n".join(m.content for m in messages if m.role == "user" and m.content.strip())
 
 
 _ARRAY = re.compile(r"\[.*\]", re.DOTALL)

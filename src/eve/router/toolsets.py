@@ -1,8 +1,11 @@
 """Escolha de quais ferramentas o modelo vê.
 
-Oferecer as 23 ferramentas de uma vez leva o prompt de ~30 para ~1.900 tokens e
-a resposta de 0,5 s para 5 s. O corte é em duas etapas: a rota define os
-namespaces plausíveis, e um escore lexical simples ordena o que sobrou.
+Oferecer todas as ferramentas de uma vez leva o prompt de ~30 para milhares de
+tokens e a resposta de 0,5 s para 5 s. O corte é em duas etapas: a rota define
+os namespaces plausíveis, e um escore lexical simples ordena o que sobrou.
+
+A ordem do resultado importa tanto quanto o corte: o modelo tende a alcançar a
+primeira ferramenta plausível da lista.
 
 O escore é deliberadamente burro e explicável. Um índice vetorial resolveria
 melhor, mas custaria embeddings a cada mensagem — caro demais para uma decisão
@@ -36,6 +39,8 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
     "clipboard": ("copiar", "colar", "transferencia", "copie", "cole"),
     "url": ("site", "link", "endereco", "navegador", "web"),
     "system": ("sistema", "computador", "mac", "maquina", "tela", "volume", "som"),
+    "web": ("internet", "online", "web"),
+    "browser": ("navegador", "navegar", "pagina", "site", "aba"),
 }
 
 _WORD = re.compile(r"[a-z0-9]+")
@@ -66,10 +71,12 @@ class ToolSelection:
         return len(self.names)
 
 
-def keywords_for(name: str, description: str) -> set[str]:
+def keywords_for(name: str, description: str, extras: tuple[str, ...] = ()) -> set[str]:
     namespace = name.split(".")[0]
     words = tokenize(name.replace(".", " ").replace("_", " ")) | tokenize(description)
-    return words | set(SYNONYMS.get(namespace, ()))
+    # Sinônimos e palavras da ferramenta passam pela mesma normalização das
+    # palavras da consulta, senão "pesquisas" não casaria com "pesquisa".
+    return words | {_raiz(s) for s in (*SYNONYMS.get(namespace, ()), *extras)}
 
 
 def select_tools(
@@ -101,14 +108,18 @@ def select_tools(
     palavras = tokenize(text)
     scored = []
     for spec in candidates:
-        overlap = palavras & keywords_for(spec.name, spec.description)
+        overlap = palavras & keywords_for(spec.name, spec.description, spec.keywords)
         # Empate é resolvido pelo nome, para a seleção ser determinística.
         scored.append((len(overlap), spec.name))
     scored.sort(key=lambda item: (-item[0], item[1]))
 
-    chosen = [name for _, name in scored[:limit]]
+    # A ordem importa: o modelo tende a alcançar a primeira ferramenta
+    # plausível da lista. Ordenar o resultado final por nome descartaria o
+    # ranking — foi o que fez um pedido de pesquisa começar pelo navegador,
+    # porque "browser" vem antes de "web" no alfabeto.
+    chosen = tuple(name for _, name in scored[:limit])
     melhores = scored[0][0]
     return ToolSelection(
-        tuple(sorted(chosen)),
+        chosen,
         f"{len(chosen)} de {len(candidates)} por relevância (melhor escore {melhores})",
     )

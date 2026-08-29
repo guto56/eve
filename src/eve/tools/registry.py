@@ -87,6 +87,7 @@ def tool(
     timeout: float = 30.0,
     requires: tuple[str, ...] = (),
     secret_fields: frozenset[str] = frozenset(),
+    keywords: tuple[str, ...] = (),
 ) -> Callable[[Handler], Handler]:
     """Declara uma ferramenta e a registra.
 
@@ -105,6 +106,7 @@ def tool(
             timeout=timeout,
             requires=requires,
             secret_fields=secret_fields,
+            keywords=keywords,
         )
         # `registry or ...` seria falsy com registro vazio, pois ToolRegistry tem __len__.
         target = registry if registry is not None else default_registry()

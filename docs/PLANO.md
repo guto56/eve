@@ -39,7 +39,7 @@ Restrição dominante do alvo: **Apple M1, 8 GB de RAM**. Nada de modelo local a
 | 8 | Voz | Deepgram STT streaming, Cartesia TTS, VAD, barge-in | **concluída** (wake word fica para depois) |
 | 9 | Skills + MCP | instalar/remover/ativar Skills; cliente MCP no Tool Bus | **concluída** |
 | 10 | Web + navegador | Tavily, Playwright como Tool | **concluída** |
-| 11 | Agentes | tarefas multi-etapa com progresso | |
+| 11 | Agentes | tarefas multi-etapa com progresso | **concluída** |
 | 12 | Eventos + proatividade | Event System, observadores, notificações por prioridade | |
 | 13 | Instalador | comando único, idempotente, atualizável, reversível | |
 | 14 | Telefonia (futuro) | Twilio/SIP, chamadas por evento | |

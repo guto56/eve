@@ -43,6 +43,12 @@ class EventType:
     TOOL_COMPLETED = "tool.completed"
     TOOL_FAILED = "tool.failed"
 
+    # tarefas de agente
+    TASK_STARTED = "task.started"
+    TASK_STEP = "task.step"
+    TASK_FINISHED = "task.finished"
+    TASK_CANCELLED = "task.cancelled"
+
     # memória, skills, mcp
     MEMORY_WRITTEN = "memory.written"
     SKILL_INSTALLED = "skill.installed"

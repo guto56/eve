@@ -75,6 +75,10 @@ async def status(request: Request) -> dict[str, Any]:
             "total": await app.state.memory.store.count(),
             "semantic_search": app.state.memory.store.vectors.available,
         },
+        "tasks": {
+            "total": len(app.state.tasks),
+            "active": len(app.state.tasks.active),
+        },
         "chat": {
             "sessions": len(app.state.chat.sessions),
             "max_tool_rounds": app.state.chat.max_rounds,

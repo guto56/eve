@@ -383,3 +383,24 @@ async def test_known_failures_do_not_leak_the_exception_class(
 
     result = await tool_bus.call("t.negado")
     assert result.error == "fora dos diretórios permitidos"
+
+
+async def test_espera_por_autorizacao_nao_conta_como_execucao(tool_bus: ToolBus) -> None:
+    """Sem separar, uma ferramenta que ficou parada esperando o usuário
+    apareceria como lenta — e a observabilidade mentiria sobre a lentidão."""
+    add_echo(tool_bus.registry, risk=RiskLevel.CONFIRM)
+    task = asyncio.create_task(tool_bus.call("t.echo", {"texto": "oi"}))
+    await asyncio.sleep(0.15)
+    await resolve_when_pending(tool_bus, approved=True)
+    result = await task
+
+    assert result.ok is True
+    assert result.waited_ms >= 100
+    assert result.duration_ms < result.waited_ms
+    assert tool_bus.audit.tail()[-1]["waited_ms"] >= 100
+
+
+async def test_ferramenta_segura_nao_espera_nada(tool_bus: ToolBus) -> None:
+    add_echo(tool_bus.registry)
+    result = await tool_bus.call("t.echo", {"texto": "oi"})
+    assert result.waited_ms == 0.0

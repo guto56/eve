@@ -92,6 +92,12 @@ class ToolResult:
     error: str | None = None
     error_kind: str | None = None
     duration_ms: float = 0.0
+    waited_ms: float = 0.0
+    """Tempo parado esperando autorização humana.
+
+    Sem separar isto, uma ferramenta que ficou 86 s aguardando o usuário
+    aparece como se tivesse levado 86 s para executar — e a observabilidade
+    (spec §38) passa a mentir sobre onde está a lentidão."""
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -102,6 +108,7 @@ class ToolResult:
             "error": self.error,
             "error_kind": self.error_kind,
             "duration_ms": round(self.duration_ms, 2),
+            "waited_ms": round(self.waited_ms, 2),
         }
 
 
@@ -124,6 +131,12 @@ class ToolSpec:
     """Permissões do macOS necessárias, para a interface poder explicá-las."""
     secret_fields: frozenset[str] = field(default_factory=frozenset)
     """Campos que nunca entram no log de auditoria."""
+    keywords: tuple[str, ...] = ()
+    """Palavras que apontam para esta ferramenta na seleção por relevância.
+
+    A descrição está em português mas o nome está em inglês; sem isto,
+    "pesquise" não alcança `web.search`. Serve também para desempatar entre
+    ferramentas do mesmo namespace."""
 
     @property
     def namespace(self) -> str:

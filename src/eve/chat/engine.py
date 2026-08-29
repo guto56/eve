@@ -48,8 +48,13 @@ log = get_logger(__name__)
 
 MAX_TOOL_ROUNDS = 4
 
-#: Rotas de onde não se extrai memória automaticamente.
-SEM_EXTRACAO = frozenset({Route.MEMORY, Route.COMMAND})
+#: Só se extrai memória de CONVERSA.
+#:
+#: Pedir uma ação, uma pesquisa ou uma tarefa não é contar algo sobre si. Sem
+#: este corte, "compare o preço destes fones" virava oito memórias inventadas
+#: sobre as preferências do usuário — e uma delas depois contaminou a resposta
+#: de uma pergunta sem relação nenhuma.
+COM_EXTRACAO = frozenset({Route.CHAT})
 
 
 @dataclass
@@ -72,6 +77,8 @@ class ChatEngine:
         max_rounds: int = MAX_TOOL_ROUNDS,
         memory: Any = None,
         skills: Any = None,
+        agent: Any = None,
+        tasks: Any = None,
     ) -> None:
         self.router = router
         self.providers = providers
@@ -81,6 +88,8 @@ class ChatEngine:
         self.max_rounds = max_rounds
         self.memory = memory
         self.skills = skills
+        self.agent = agent
+        self.tasks = tasks
         self._extracoes: set[asyncio.Task[Any]] = set()
 
     async def send(
@@ -109,6 +118,9 @@ class ChatEngine:
         try:
             if decision.is_fast_path:
                 async for event in self._fast_path(session, decision, source):
+                    yield event
+            elif decision.route is Route.TASK and self.agent is not None:
+                async for event in self._agent_path(session, decision, text, source):
                     yield event
             else:
                 async for event in self._model_path(session, decision, text, source):
@@ -150,16 +162,7 @@ class ChatEngine:
             return
         if len(session.messages) < 2:
             return
-        if decision.route in SEM_EXTRACAO:
-            # MEMORY: o usuário já disse o que queria guardar e a EVE guardou;
-            # extrair de novo geraria uma segunda cópia reescrita do mesmo
-            # fato — parecida demais para ser útil, diferente demais para o
-            # deduplicador reconhecer.
-            #
-            # COMMAND: pedir uma ação não é contar algo sobre si. Sem este
-            # corte, "escreva oi nesse arquivo" virava a memória "o usuário
-            # solicitou que um texto fosse salvo em um arquivo" — ruído que
-            # depois disputa espaço no contexto com o que importa.
+        if decision.route not in COM_EXTRACAO:
             return
         tarefa = asyncio.create_task(self._extract(session))
         self._extracoes.add(tarefa)
@@ -234,6 +237,70 @@ class ChatEngine:
             return payload
         return resposta.text.strip() or payload
 
+    # ------------------------------------------------------ caminho agente
+
+    async def _agent_path(
+        self,
+        session: ChatSession,
+        decision: RoutingDecision,
+        text: str,
+        source: str,
+    ) -> AsyncIterator[ChatEvent]:
+        """Tarefa de várias etapas: plano visível, passos reais, síntese."""
+        task = self.tasks.create(text, session.id)
+        yield ChatEvent("task", {"id": task.id, "goal": task.goal})
+
+        # A tarefa roda numa corrotina própria, não no gerador desta conversa:
+        # fechar o terminal ou a aba não pode matar um trabalho em andamento.
+        # Quem sai perde o acompanhamento; a tarefa segue e fica em `eve task`.
+        fila: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+        corrotina = asyncio.create_task(
+            self._pump_task(task, decision.tools, session.history(), fila)
+        )
+        self.tasks.track(task, corrotina)
+
+        resposta = ""
+        async for evento in _drain(fila):
+            kind = evento.pop("kind")
+            if kind == "delta":
+                resposta += evento["text"]
+                await self.bus.emit(
+                    EventType.MESSAGE_DELTA, source=source, session=session.id, **evento
+                )
+                yield ChatEvent("delta", evento)
+            elif kind == "step_started":
+                yield ChatEvent("tool", {"name": evento["tool"], "arguments": evento["arguments"]})
+            elif kind == "step_done":
+                passo = evento["step"]
+                yield ChatEvent(
+                    "tool_result",
+                    {
+                        "name": passo["tool"],
+                        "ok": passo["ok"],
+                        "value": None,
+                        "error": passo["error"],
+                        "error_kind": None if passo["ok"] else "step_failed",
+                        "duration_ms": passo["duration_ms"],
+                    },
+                )
+            else:
+                yield ChatEvent(kind, evento)
+
+        session.add(assistant(resposta))
+
+    async def _pump_task(
+        self,
+        task: Any,
+        tools: Sequence[str],
+        history: Sequence[Message],
+        fila: asyncio.Queue[dict[str, Any] | None],
+    ) -> None:
+        try:
+            async for evento in self.agent.run(task, tools, history):
+                await fila.put(evento)
+        finally:
+            await fila.put(None)
+
     # ------------------------------------------------------ caminho modelo
 
     async def _model_path(
@@ -303,6 +370,15 @@ class ChatEngine:
                 mensagem = tool_result(call, _tool_payload(result))
                 session.add(mensagem)
                 messages.append(mensagem)
+
+
+async def _drain(fila: asyncio.Queue[dict[str, Any] | None]) -> AsyncIterator[dict[str, Any]]:
+    """Repassa o que a tarefa produz até ela terminar."""
+    while True:
+        evento = await fila.get()
+        if evento is None:
+            return
+        yield evento
 
 
 def _tool_payload(result: ToolResult) -> str:

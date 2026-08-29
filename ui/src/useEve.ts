@@ -46,6 +46,15 @@ export function useEve() {
         case "session":
           setSession(frame.session as string);
           break;
+        case "task":
+          patchLast((turn) => ({ ...turn, taskId: frame.id as string }));
+          break;
+        case "task_plan":
+          patchLast((turn) => ({
+            ...turn,
+            plan: ((frame.task as { plan?: string[] })?.plan ?? []) as string[],
+          }));
+          break;
         case "routed":
           patchLast((turn) => ({ ...turn, routing: frame as unknown as Routing }));
           break;

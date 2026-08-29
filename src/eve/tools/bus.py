@@ -54,6 +54,15 @@ ERROR_KINDS: tuple[tuple[type[Exception], str], ...] = (
 )
 
 
+UNATTENDED_TIMEOUT = 5.0
+"""Prazo quando não há ninguém observando.
+
+"Sem resposta significa não" continua valendo, mas esperar dois minutos por
+uma confirmação que ninguém vai dar é só desperdício — e num agente rodando
+sozinho, dois minutos por ferramenta arruínam a tarefa. Havendo interface
+aberta, o prazo cheio volta a valer."""
+
+
 def classify(exc: Exception) -> tuple[str, str]:
     """Devolve ``(categoria, mensagem)`` para uma exceção de handler."""
     for exc_type, kind in ERROR_KINDS:
@@ -149,8 +158,11 @@ class ToolBus:
                 request_id, spec, raw_args, decision, decision.reason, started, source, caller
             )
 
+        esperou = 0.0
         if decision.needs_confirmation and not auto_approve:
+            antes = now_ms()
             approved, by = await self._ask(request_id, spec, raw_args, decision, source)
+            esperou = now_ms() - antes
             if not approved:
                 return await self._deny(
                     request_id, spec, raw_args, decision, by, started, source, caller
@@ -217,7 +229,8 @@ class ToolBus:
             tool=name,
             ok=True,
             value=value,
-            duration_ms=now_ms() - started,
+            duration_ms=now_ms() - started - esperou,
+            waited_ms=esperou,
         )
         await self.events.emit(
             EventType.TOOL_COMPLETED,
@@ -235,6 +248,7 @@ class ToolBus:
             source=source,
             caller=caller,
             duration_ms=round(result.duration_ms, 2),
+            waited_ms=round(result.waited_ms, 2),
         )
         return result
 
@@ -265,7 +279,11 @@ class ToolBus:
             risk=decision.risk.value,
             reason=decision.reason,
             source=source,
-            timeout=self.settings.permissions.confirm_timeout,
+            timeout=(
+                self.settings.permissions.confirm_timeout
+                if self.events.subscriber_count > 0
+                else UNATTENDED_TIMEOUT
+            ),
         )
 
     async def _deny(

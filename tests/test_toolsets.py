@@ -27,7 +27,12 @@ def test_chat_route_gets_no_tools(full_registry: ToolRegistry) -> None:
 def test_command_route_is_capped(full_registry: ToolRegistry) -> None:
     selection = select_tools(full_registry, Route.COMMAND, "qualquer coisa", limit=8)
     assert len(selection) == 8
-    assert selection.names == tuple(sorted(selection.names))
+
+
+def test_a_mais_relevante_vem_primeiro(full_registry: ToolRegistry) -> None:
+    """O modelo alcança a primeira ferramenta plausível da lista."""
+    nomes = select_tools(full_registry, Route.TASK, "pesquise o preço de um fone").names
+    assert nomes[0] == "web.search"
 
 
 def test_relevant_tools_are_chosen(full_registry: ToolRegistry) -> None:

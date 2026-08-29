@@ -52,6 +52,13 @@ export function TurnView({ turn, detalhes }: { turn: Turn; detalhes: boolean }) 
           )}
         </div>
       )}
+      {turn.plan?.length ? (
+        <ol className="plan">
+          {turn.plan.map((passo) => (
+            <li key={passo}>{passo}</li>
+          ))}
+        </ol>
+      ) : null}
       {turn.tools.map((run) => (
         <ToolChip key={run.id} run={run} />
       ))}

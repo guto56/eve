@@ -23,6 +23,7 @@ from eve.cli.ai_cmd import ask, key_app, provider_app
 from eve.cli.chat_cmd import chat as chat_cmd
 from eve.cli.ext_cmd import mcp_app, skill_app
 from eve.cli.memory_cmd import memory_app
+from eve.cli.task_cmd import task_app
 from eve.cli.tools_cmd import permission_app, tool_app
 from eve.cli.voice_cmd import voice_app
 from eve.config import load_settings
@@ -48,6 +49,7 @@ app.add_typer(memory_app)
 app.add_typer(voice_app)
 app.add_typer(skill_app)
 app.add_typer(mcp_app)
+app.add_typer(task_app)
 app.command(name="ask")(ask)
 app.command(name="chat")(chat_cmd)
 

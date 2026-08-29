@@ -68,6 +68,21 @@ def register_web_tools(registry: ToolRegistry) -> ToolRegistry:
         risk=RiskLevel.SAFE,
         registry=registry,
         timeout=60.0,
+        keywords=(
+            "pesquisar",
+            "pesquise",
+            "pesquisa",
+            "buscar",
+            "busque",
+            "procurar",
+            "procure",
+            "noticia",
+            "preco",
+            "cotacao",
+            "quanto",
+            "custa",
+            "descubra",
+        ),
     )
     async def search(params: SearchParams, ctx: ToolContext) -> dict[str, Any]:
         resposta = await ctx.service("search").search(
@@ -85,6 +100,7 @@ def register_web_tools(registry: ToolRegistry) -> ToolRegistry:
         risk=RiskLevel.SAFE,
         registry=registry,
         timeout=90.0,
+        keywords=("ler", "leia", "extrair", "conteudo", "artigo"),
     )
     async def extract(params: ExtractParams, ctx: ToolContext) -> dict[str, Any]:
         paginas = await ctx.service("search").extract(params.urls)

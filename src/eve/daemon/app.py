@@ -16,12 +16,25 @@ from typing import Any
 from fastapi import FastAPI
 
 from eve import __version__
+from eve.agent.manager import TaskManager
+from eve.agent.runner import AgentRunner
 from eve.ai.manager import ProviderManager
 from eve.browser.session import BrowserSession
 from eve.bus import EventBus
 from eve.chat.engine import ChatEngine
 from eve.config import Settings, load_settings
-from eve.daemon.routes import ai, chat, extensions, health, memory, tools, voice, web, ws
+from eve.daemon.routes import (
+    ai,
+    chat,
+    extensions,
+    health,
+    memory,
+    tasks,
+    tools,
+    voice,
+    web,
+    ws,
+)
 from eve.events import EventType
 from eve.logging import get_logger
 from eve.mcp.client import MCPServerConfig
@@ -67,6 +80,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         conexoes.cancel()
         await asyncio.gather(conexoes, return_exceptions=True)
+        await app.state.tasks.aclose()
         await app.state.mcp.aclose()
         await app.state.browser.close()
         if app.state.search is not None:
@@ -118,6 +132,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.providers,
         extra_namespaces=app.state.skills.namespaces_for,
     )
+    app.state.tasks = TaskManager()
+    app.state.agent = AgentRunner(app.state.providers, app.state.tools, app.state.bus)
     app.state.chat = ChatEngine(
         router=app.state.router,
         providers=app.state.providers,
@@ -125,6 +141,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         bus=app.state.bus,
         memory=app.state.memory,
         skills=app.state.skills,
+        agent=app.state.agent,
+        tasks=app.state.tasks,
     )
     app.include_router(health.router)
     app.include_router(ws.router)
@@ -134,6 +152,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(memory.router)
     app.include_router(voice.router)
     app.include_router(extensions.router)
+    app.include_router(tasks.router)
     # A interface é montada por último: sua rota curinga não pode capturar
     # nada da API.
     web.mount(app)

@@ -260,3 +260,38 @@ async def test_dimension_mismatch_degrades_instead_of_crashing(tmp_path: Path) -
     # A busca textual continua de pé.
     assert len(await store.search("projeto")) == 1
     await store.aclose()
+
+
+async def test_extracao_le_so_o_que_o_usuario_disse(manager: MemoryManager, fake_providers) -> None:
+    """Regressão: incluir as respostas da EVE fazia o extrator tratar as
+    conclusões dela como fatos sobre o usuário — uma recomendação de fone
+    virou "o usuário valoriza o ecossistema Apple", que ninguém disse."""
+    from eve.ai.base import assistant
+    from eve.ai.base import user as user_msg
+    from tests.fakes import reply
+
+    fake_providers.fake.queue.append(reply("[]"))
+    await manager.extract(
+        [
+            user_msg("compare esses fones"),
+            assistant("Recomendo o Sony, que integra bem com o ecossistema Apple."),
+        ]
+    )
+    enviado = fake_providers.fake.calls[-1]["messages"][-1].content
+    assert "compare esses fones" in enviado
+    assert "Sony" not in enviado
+    assert "Apple" not in enviado
+
+
+async def test_extracao_tem_teto(manager: MemoryManager, fake_providers) -> None:
+    """Oito memórias de uma troca não é aprendizado, é ruído."""
+    from eve.ai.base import user as user_msg
+    from eve.memory.manager import MAX_POR_EXTRACAO
+    from tests.fakes import reply
+
+    itens = ", ".join(
+        f'{{"content": "Fato numero {i} sobre o usuario", "importance": 0.8}}' for i in range(9)
+    )
+    fake_providers.fake.queue.append(reply(f"[{itens}]"))
+    gravadas = await manager.extract([user_msg("uma conversa longa")])
+    assert len(gravadas) == MAX_POR_EXTRACAO
