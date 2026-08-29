@@ -87,6 +87,28 @@ def _listagem(args: dict[str, Any], value: Any) -> str:
     return f"{value['count']} item(ns) em {value['path']}: {_lista(nomes)}{resto}."
 
 
+def _abertura(args: dict[str, Any], value: Any) -> str:
+    if not value.get("found"):
+        frase = f"Não achei {value.get('query', 'isso')}."
+        if parecidos := value.get("similar"):
+            frase += f" Você quis dizer {_lista(parecidos)}?"
+        else:
+            frase += " Quer que eu procure na App Store ou na web?"
+        return frase
+
+    rotulo = value["opened"]
+    match value.get("kind"):
+        case "web":
+            return f"{rotulo} não está instalado aqui — abri no navegador."
+        case "url":
+            return f"Abri {value['target']}."
+        case "path":
+            return f"Abri {rotulo} no Finder."
+        case _:
+            aviso = f" ({value['note']})" if value.get("note") else ""
+            return f"Abri {rotulo}.{aviso}"
+
+
 def _memoria_gravada(_: dict[str, Any], value: Any) -> str:
     estado = value.get("estado")
     if estado == "reforçada":
@@ -157,14 +179,14 @@ def _template(texto: str) -> Formatter:
 
 #: Ações: template instantâneo. Consultas: formatador que lê o resultado.
 FORMATTERS: dict[str, Formatter] = {
-    "app.open": lambda args, value: (
-        f"Abri {args['name']} no navegador."
-        if isinstance(value, dict) and value.get("via") == "web"
-        else f"Abri {args['name']}."
-    ),
+    "app.open": lambda args, value: _abertura(args, value),
     "app.activate": _template("Trouxe {name} para a frente."),
     "app.quit": _template("Fechei {name}."),
-    "url.open": _template("Abri {url}."),
+    "url.open": lambda args, value: (
+        f"Abri {len(value['opened'])} abas."
+        if len(value.get("opened", [])) > 1
+        else f"Abri {value['opened'][0]}."
+    ),
     "clipboard.write": _template("Copiei para a área de transferência."),
     "system.set_volume": _template("Volume em {level}%."),
     "file.mkdir": _template("Pasta criada em {path}."),

@@ -55,6 +55,7 @@ from eve.tools.approvals import ApprovalBroker
 from eve.tools.audit import AuditLog
 from eve.tools.builtin import register_builtin_tools
 from eve.tools.bus import ToolBus
+from eve.tools.calendar_tools import register_calendar_tools
 from eve.tools.macos_tools import register_macos_tools
 from eve.tools.memory_tools import register_memory_tools
 from eve.tools.registry import ToolRegistry
@@ -187,8 +188,10 @@ def build_tool_bus(
     settings: Settings, bus: EventBus, services: dict[str, object] | None = None
 ) -> ToolBus:
     """Monta registro, permissões, auditoria e Tool Bus a partir da configuração."""
-    registry = register_web_tools(
-        register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    registry = register_calendar_tools(
+        register_web_tools(
+            register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+        )
     )
     permissions = PermissionEngine(
         overrides=parse_overrides(settings.permissions.overrides),

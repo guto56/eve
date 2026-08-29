@@ -232,10 +232,13 @@ async def test_app_open_in_background(macos_bus: ToolBus) -> None:
     assert result.value["background"] is True
 
 
-async def test_open_unknown_app_fails_clearly(macos_bus: ToolBus) -> None:
+async def test_open_unknown_app_says_so_instead_of_failing(macos_bus: ToolBus) -> None:
+    """Não achar não é erro: é resposta. E vem com sugestão."""
     result = await macos_bus.call("app.open", {"name": "AplicativoQueNaoExiste7742"})
-    assert result.ok is False
-    assert result.error_kind == "handler_error"
+    assert result.ok is True
+    assert result.value["found"] is False
+    assert "não achei" in result.value["why"].lower()
+    assert result.value["suggestion"]
 
 
 async def test_quit_needs_confirmation_and_never_runs_without_it(macos_bus: ToolBus) -> None:
@@ -257,15 +260,22 @@ async def test_quit_reports_applescript_errors(macos_bus: ToolBus) -> None:
     ["file:///etc/passwd", "javascript:alert(1)", "data:text/html,<script>", "ftp://x", "só texto"],
 )
 async def test_url_open_rejects_dangerous_schemes(macos_bus: ToolBus, url: str) -> None:
-    result = await macos_bus.call("url.open", {"url": url})
+    result = await macos_bus.call("url.open", {"urls": [url]})
     assert result.ok is False
     assert result.error_kind == "invalid_args"
 
 
 async def test_url_open_accepts_https(macos_bus: ToolBus) -> None:
     spec = macos_bus.registry.get("url.open")
-    parsed = spec.params.model_validate({"url": "https://exemplo.com"})
-    assert parsed.url == "https://exemplo.com"
+    parsed = spec.params.model_validate({"urls": ["https://exemplo.com"]})
+    assert parsed.urls == ["https://exemplo.com"]
+
+
+async def test_url_open_abre_varias_abas(macos_bus: ToolBus) -> None:
+    """ "Abre o YouTube e a cotação do dólar" são duas abas, não duas conversas."""
+    spec = macos_bus.registry.get("url.open")
+    parsed = spec.params.model_validate({"urls": ["https://a.com", "https://b.com"]})
+    assert len(parsed.urls) == 2
 
 
 # --------------------------------------------------------------------- sistema
@@ -333,15 +343,68 @@ async def test_web_only_service_falls_back_to_the_browser(macos_bus: ToolBus) ->
     """ "Abra o YouTube" não é pedido para achar um app chamado YouTube."""
     result = await macos_bus.call("app.open", {"name": "youtube"})
     assert result.ok is True
-    assert result.value["via"] == "web"
-    assert result.value["url"] == "https://www.youtube.com"
+    assert result.value["kind"] == "web"
+    assert result.value["target"] == "https://www.youtube.com"
 
 
 async def test_installed_app_wins_over_the_web_fallback(macos_bus: ToolBus) -> None:
     result = await macos_bus.call("app.open", {"name": "Finder", "background": True})
-    assert result.value["via"] == "app"
+    assert result.value["kind"] == "app"
 
 
-async def test_unknown_app_still_fails_clearly(macos_bus: ToolBus) -> None:
-    result = await macos_bus.call("app.open", {"name": "AppQueNaoExiste7742"})
-    assert result.ok is False
+async def test_app_com_nome_parcial_ou_errado(macos_bus: ToolBus) -> None:
+    """O que o usuário pediu e falhava: "appstore" sem espaço vira App Store."""
+    result = await macos_bus.call("app.open", {"name": "appstore", "background": True})
+    assert result.value["found"] is True
+    assert result.value["opened"] == "App Store"
+
+
+async def test_pasta_e_aberta_como_pasta(macos_bus: ToolBus, tmp_path) -> None:
+    """ "pasta X" é pasta, mesmo existindo app com nome parecido."""
+    from eve.macos.resolve import resolve
+
+    alvo = resolve("pasta Downloads")
+    assert alvo.kind == "path"
+    assert alvo.value.endswith("Downloads")
+
+
+def test_resolucao_usa_o_que_esta_instalado_nao_uma_lista_fixa() -> None:
+    """O que o usuário pediu: achar o app pelo nome parcial, errado ou
+    traduzido — sem tabela nossa de nomes conhecidos."""
+    from eve.macos.apps import search_apps
+    from eve.macos.resolve import resolve
+
+    # Sem espaço, com o nome do arquivo diferente do nome exibido.
+    assert resolve("appstore").value == "App Store"
+    # Nome localizado, que vem do próprio Spotlight.
+    assert resolve("ajustes").value == "System Settings"
+    # Erro de digitação.
+    assert resolve("chorme").value == "Google Chrome"
+    # Parcial.
+    assert search_apps("termin")[0].name == "Terminal"
+
+
+def test_resolucao_distingue_app_site_pasta_e_arquivo(tmp_path) -> None:
+    from eve.macos.resolve import resolve
+
+    assert resolve("Safari").kind == "app"
+    assert resolve("github.com").kind == "url"
+    assert resolve("https://x.com").kind == "url"
+    assert resolve("~/Downloads").kind == "path"
+    assert resolve("netflix").kind == "web"  # não instalado; vai para a web
+
+
+def test_a_palavra_do_usuario_decide_o_tipo() -> None:
+    """ "pasta Downloads" é pasta, mesmo havendo apps com nome parecido."""
+    from eve.macos.resolve import resolve
+
+    assert resolve("pasta Downloads").kind == "path"
+    assert resolve("site netflix").kind == "web"
+
+
+def test_nao_achar_vem_com_alternativas() -> None:
+    from eve.macos.resolve import resolve
+
+    alvo = resolve("xyzqualquercoisa7742")
+    assert alvo.kind == "unknown"
+    assert "não achei" in alvo.note

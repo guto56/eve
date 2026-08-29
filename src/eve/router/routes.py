@@ -44,10 +44,20 @@ IMPLEMENTED: frozenset[Route] = frozenset(
 #: oferecer 23 ferramentas custa ~1.900 tokens e segundos de latência.
 NAMESPACES: dict[Route, tuple[str, ...]] = {
     Route.CHAT: (),
-    Route.COMMAND: ("app", "url", "file", "clipboard", "system"),
+    Route.COMMAND: ("app", "url", "file", "clipboard", "system", "calendar"),
     Route.WEB: ("web", "url"),
     Route.MEMORY: ("memory",),
-    Route.TASK: ("app", "url", "file", "clipboard", "system", "web", "browser", "memory"),
+    Route.TASK: (
+        "app",
+        "url",
+        "file",
+        "clipboard",
+        "system",
+        "calendar",
+        "web",
+        "browser",
+        "memory",
+    ),
     Route.SKILL: (),
     Route.MCP: (),
     Route.VOICE: (),

@@ -23,3 +23,13 @@ def test_ensure_is_idempotent(isolated_home: Path) -> None:
         assert d.is_dir()
     assert p.config_file.parent == p.home
     assert p.db_file.parent == p.data
+
+
+def test_pasta_de_trabalho_e_visivel_e_se_explica(isolated_home: Path) -> None:
+    """Uma captura salva em ~/.eve é uma captura perdida para quem não sabe
+    mostrar arquivos ocultos no Finder."""
+    p = paths().ensure()
+    assert not p.work.name.startswith(".")
+    assert p.screenshots.parent == p.work
+    assert (p.work / "LEIA-ME.txt").exists()
+    assert "~/.eve" in (p.work / "LEIA-ME.txt").read_text()

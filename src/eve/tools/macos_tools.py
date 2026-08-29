@@ -21,6 +21,7 @@ from pydantic import Field, field_validator
 from eve.config import Settings
 from eve.macos import native
 from eve.macos.osa import run_applescript_async
+from eve.macos.resolve import resolve
 from eve.macos.safepath import resolve_safe_path
 from eve.tools.registry import ToolRegistry
 from eve.tools.registry import tool as tool_decorator
@@ -88,21 +89,34 @@ class AppParams(ToolParams):
     name: str = Field(description="Nome do aplicativo, ex.: Safari.", min_length=1, max_length=200)
 
 
-class OpenAppParams(AppParams):
+class OpenAppParams(ToolParams):
+    name: str = Field(
+        description="O que abrir: nome de app, site, pasta ou arquivo. "
+        "Pode ser parcial ('whats', 'appstore') ou com o tipo ('pasta EVE').",
+        min_length=1,
+        max_length=300,
+    )
     background: bool = Field(default=False, description="Abrir sem trazer para a frente.")
 
 
 class UrlParams(ToolParams):
-    url: str = Field(description="Endereço a abrir.", max_length=4000)
+    urls: list[str] = Field(
+        description="Um ou mais endereços. Cada um abre numa aba.",
+        min_length=1,
+        max_length=8,
+    )
 
-    @field_validator("url")
+    @field_validator("urls")
     @classmethod
-    def _check_scheme(cls, value: str) -> str:
-        scheme = urlparse(value).scheme.lower()
-        if scheme not in ALLOWED_URL_SCHEMES:
-            allowed = ", ".join(sorted(ALLOWED_URL_SCHEMES))
-            raise ValueError(f"esquema não permitido: {scheme or '(nenhum)'}. Use um de: {allowed}")
-        return value
+    def _check_schemes(cls, valores: list[str]) -> list[str]:
+        for value in valores:
+            scheme = urlparse(value).scheme.lower()
+            if scheme not in ALLOWED_URL_SCHEMES:
+                allowed = ", ".join(sorted(ALLOWED_URL_SCHEMES))
+                raise ValueError(
+                    f"esquema não permitido: {scheme or '(nenhum)'}. Use um de: {allowed}"
+                )
+        return valores
 
 
 class PathParams(ToolParams):
@@ -166,24 +180,47 @@ def register_macos_tools(registry: ToolRegistry) -> ToolRegistry:
 def _register_apps(registry: ToolRegistry) -> None:
     @tool_decorator(
         "app.open",
-        description="Abre um aplicativo pelo nome.",
+        description=(
+            "Abre qualquer coisa pelo nome: aplicativo, site, pasta ou arquivo. "
+            "Descobre sozinha o que é e acha o app mesmo com nome parcial ou "
+            "errado. Use esta para 'abre X'."
+        ),
         params=OpenAppParams,
         risk=RiskLevel.SAFE,
         registry=registry,
+        keywords=("abrir", "abra", "abre", "iniciar", "executar", "rodar", "lancar"),
     )
-    async def app_open(params: OpenAppParams, _: ToolContext) -> dict[str, Any]:
-        args = ["-a", params.name]
-        if params.background:
-            args.insert(0, "-g")
-        try:
+    async def app_open(params: OpenAppParams, ctx: ToolContext) -> dict[str, Any]:
+        alvo = resolve(params.name, tuple(ctx.settings.files.allowed_roots))
+
+        if alvo.kind == "unknown":
+            return {
+                "opened": None,
+                "found": False,
+                "query": alvo.label,
+                "why": alvo.note,
+                "similar": list(alvo.alternatives),
+                "suggestion": (
+                    f"Posso procurar '{alvo.label}' na App Store ou na web, se você quiser."
+                ),
+            }
+
+        if alvo.kind == "app":
+            args = ["-a", alvo.value]
+            if params.background:
+                args.insert(0, "-g")
             await _open(*args)
-        except RuntimeError:
-            url = WEB_FALLBACKS.get(params.name.strip().lower())
-            if url is None:
-                raise
-            await _open(url)
-            return {"opened": params.name, "via": "web", "url": url}
-        return {"opened": params.name, "via": "app", "background": params.background}
+        else:
+            await _open(alvo.value)
+
+        return {
+            "opened": alvo.label,
+            "found": True,
+            "kind": alvo.kind,
+            "target": alvo.value,
+            "note": alvo.note,
+            "background": params.background if alvo.kind == "app" else False,
+        }
 
     @tool_decorator(
         "app.activate",
@@ -192,9 +229,12 @@ def _register_apps(registry: ToolRegistry) -> None:
         risk=RiskLevel.SAFE,
         registry=registry,
     )
-    async def app_activate(params: AppParams, _: ToolContext) -> dict[str, Any]:
-        await _open("-a", params.name)
-        return {"activated": params.name}
+    async def app_activate(params: AppParams, ctx: ToolContext) -> dict[str, Any]:
+        alvo = resolve(params.name, tuple(ctx.settings.files.allowed_roots))
+        if alvo.kind != "app":
+            return {"activated": None, "found": False, "why": alvo.note or "não é um aplicativo"}
+        await _open("-a", alvo.value)
+        return {"activated": alvo.value, "found": True}
 
     @tool_decorator(
         "app.quit",
@@ -235,14 +275,20 @@ def _register_apps(registry: ToolRegistry) -> None:
 
     @tool_decorator(
         "url.open",
-        description="Abre um endereço no navegador padrão.",
+        description=(
+            "Abre endereços no navegador DO USUÁRIO, em abas visíveis. "
+            "Aceita vários de uma vez — cada um vira uma aba. "
+            "Use esta quando pedirem para abrir algo no navegador."
+        ),
         params=UrlParams,
         risk=RiskLevel.SAFE,
         registry=registry,
+        keywords=("navegador", "aba", "abas", "abrir", "abre", "site", "link"),
     )
     async def url_open(params: UrlParams, _: ToolContext) -> dict[str, Any]:
-        await _open(params.url)
-        return {"opened": params.url}
+        for endereco in params.urls:
+            await _open(endereco)
+        return {"opened": list(params.urls), "tabs": len(params.urls)}
 
 
 def _register_files(registry: ToolRegistry) -> None:
@@ -252,6 +298,7 @@ def _register_files(registry: ToolRegistry) -> None:
         params=ReadParams,
         risk=RiskLevel.SAFE,
         registry=registry,
+        keywords=("ler", "leia", "abrir o conteudo", "mostrar", "mostre", "conteudo"),
     )
     async def file_read(params: ReadParams, ctx: ToolContext) -> dict[str, Any]:
         path = _safe(params.path, ctx.settings, must_exist=True)
@@ -277,6 +324,7 @@ def _register_files(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         registry=registry,
         reversible=False,
+        keywords=("escrever", "escreva", "escreve", "salvar", "salve", "criar", "anotar"),
     )
     async def file_write(params: WriteParams, ctx: ToolContext) -> dict[str, Any]:
         path = _safe(params.path, ctx.settings)
@@ -293,6 +341,7 @@ def _register_files(registry: ToolRegistry) -> None:
         params=ListParams,
         risk=RiskLevel.SAFE,
         registry=registry,
+        keywords=("listar", "liste", "mostrar", "quais", "conteudo", "dentro"),
     )
     async def file_list(params: ListParams, ctx: ToolContext) -> dict[str, Any]:
         path = _safe(params.path, ctx.settings, must_exist=True)
@@ -321,6 +370,7 @@ def _register_files(registry: ToolRegistry) -> None:
         params=PathParams,
         risk=RiskLevel.SAFE,
         registry=registry,
+        keywords=("criar", "crie", "cria", "nova", "novo", "pasta", "diretorio"),
     )
     async def file_mkdir(params: PathParams, ctx: ToolContext) -> dict[str, Any]:
         path = _safe(params.path, ctx.settings)
@@ -335,6 +385,7 @@ def _register_files(registry: ToolRegistry) -> None:
         risk=RiskLevel.CONFIRM,
         registry=registry,
         reversible=False,
+        keywords=("mover", "mova", "renomear", "renomeie", "levar"),
     )
     async def file_move(params: MoveParams, ctx: ToolContext) -> dict[str, Any]:
         source = _safe(params.source, ctx.settings, must_exist=True)
@@ -368,6 +419,7 @@ def _register_files(registry: ToolRegistry) -> None:
         params=PathParams,
         risk=RiskLevel.CONFIRM,
         registry=registry,
+        keywords=("apagar", "apague", "deletar", "delete", "remover", "remova", "lixeira"),
     )
     async def file_trash(params: PathParams, ctx: ToolContext) -> dict[str, Any]:
         path = _safe(params.path, ctx.settings, must_exist=True)
@@ -461,6 +513,7 @@ def _register_system(registry: ToolRegistry) -> None:
         registry=registry,
         requires=("screen_recording",),
         timeout=60.0,
+        keywords=("print", "captura", "capturar", "screenshot", "tela", "printa"),
     )
     async def system_screenshot(params: ScreenshotParams, ctx: ToolContext) -> dict[str, Any]:
         from eve.paths import paths
@@ -468,10 +521,11 @@ def _register_system(registry: ToolRegistry) -> None:
         if params.path:
             target = _safe(params.path, ctx.settings)
         else:
-            folder = paths().data / "screenshots"
-            folder.mkdir(parents=True, exist_ok=True)
-            stamp = datetime.now(UTC).strftime("%Y%m%d-%H%M%S")
-            target = folder / f"tela-{stamp}.png"
+            # Pasta visível: uma captura salva em ~/.eve é uma captura perdida
+            # para quem não sabe mostrar arquivos ocultos no Finder.
+            folder = paths().ensure().screenshots
+            stamp = datetime.now().strftime("%Y-%m-%d-%Hh%M")
+            target = folder / f"tela {stamp}.png"
         target.parent.mkdir(parents=True, exist_ok=True)
 
         args = ["/usr/sbin/screencapture", "-x"]

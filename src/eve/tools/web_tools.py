@@ -110,7 +110,11 @@ def register_web_tools(registry: ToolRegistry) -> ToolRegistry:
 
     @tool_decorator(
         "browser.open",
-        description="Abre um endereço no navegador controlado pela EVE.",
+        description=(
+            "Abre um endereço no navegador INTERNO da EVE, invisível para o "
+            "usuário. Serve para ela ler ou interagir com páginas. Para abrir "
+            "algo PARA o usuário ver, use url.open."
+        ),
         params=OpenParams,
         risk=RiskLevel.SAFE,
         registry=registry,

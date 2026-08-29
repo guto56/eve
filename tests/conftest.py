@@ -17,6 +17,7 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[P
         monkeypatch.delenv(key, raising=False)
     home = tmp_path / "eve-home"
     monkeypatch.setenv("EVE_HOME", str(home))
+    monkeypatch.setenv("EVE_WORKSPACE", str(tmp_path / "eve-work"))
     # Nenhum teste toca no Keychain do usuário nem enxerga credencial real.
     monkeypatch.setenv("EVE_SECRETS_BACKEND", "memory")
     yield home
@@ -129,11 +130,14 @@ def fake_providers(settings, secret_store):
 @pytest.fixture
 def full_registry():
     from eve.tools.builtin import register_builtin_tools
+    from eve.tools.calendar_tools import register_calendar_tools
     from eve.tools.macos_tools import register_macos_tools
     from eve.tools.memory_tools import register_memory_tools
     from eve.tools.registry import ToolRegistry
     from eve.tools.web_tools import register_web_tools
 
-    return register_web_tools(
-        register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    return register_calendar_tools(
+        register_web_tools(
+            register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+        )
     )

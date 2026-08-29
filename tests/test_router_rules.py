@@ -35,8 +35,8 @@ def test_strip_accents() -> None:
         ("open Finder", "app.open", {"name": "Finder"}),
         ("feche o Chrome", "app.quit", {"name": "Chrome"}),
         ("encerre o Editor de Texto", "app.quit", {"name": "Editor de Texto"}),
-        ("abra github.com", "url.open", {"url": "https://github.com"}),
-        ("acesse https://exemplo.com/x", "url.open", {"url": "https://exemplo.com/x"}),
+        ("abra github.com", "url.open", {"urls": ["https://github.com"]}),
+        ("acesse https://exemplo.com/x", "url.open", {"urls": ["https://exemplo.com/x"]}),
         ("que horas são", "system.time", {}),
         ("coloque o volume em 40", "system.set_volume", {"level": 40}),
         ("ajuste o volume para 0", "system.set_volume", {"level": 0}),
@@ -97,8 +97,6 @@ def test_rules_that_only_pick_a_route(texto: str, rota: Route) -> None:
         "analise meu projeto e descubra por que o build falha",
         "me explique o que é recursão",
         "crie uma pasta chamada projetos",
-        "abra a pasta Documentos",
-        "abra o arquivo relatório.pdf",
         "",
         "   ",
     ],
@@ -198,3 +196,24 @@ def test_perguntas_sobre_a_propria_eve(texto: str, topico: str) -> None:
     assert hit is not None, texto
     assert hit.tool == "eve.about"
     assert hit.arguments == {"topic": topico}
+
+
+@pytest.mark.parametrize("texto", ["abra a pasta Documentos", "abra o arquivo relatório.pdf"])
+def test_pasta_e_arquivo_vao_para_a_ferramenta_que_resolve(texto: str) -> None:
+    """Antes a regra recusava; hoje `app.open` olha o disco e decide o tipo."""
+    hit = apply_rules(texto)
+    assert hit is not None
+    assert hit.tool == "app.open"
+
+
+@pytest.mark.parametrize(
+    "texto",
+    [
+        "abre o youtube e a cotação do dólar",
+        "abra o Safari, o Chrome e o Finder",
+        "abre o youtube em outra aba",
+    ],
+)
+def test_alvo_composto_vai_para_o_modelo(texto: str) -> None:
+    """Regressão: a frase inteira virava "nome de app"."""
+    assert apply_rules(texto) is None

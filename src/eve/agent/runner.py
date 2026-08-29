@@ -69,6 +69,9 @@ fontes. Use o navegador só quando precisar interagir com a página.
 nenhuma, e responder depois disso é inventar com aparência de pesquisa. Se não
 conseguiu os dados, diga que não conseguiu em vez de estimar.
 
+Só afirme ter feito algo se uma ferramenta tiver feito. Não havendo ferramenta
+para alguma parte do pedido, diga que aquela parte não foi feita.
+
 Quando tiver o suficiente, pare de usar ferramentas e escreva a resposta final:
 o que o usuário queria saber, não um relato do que você fez. Deixe claro o que
 veio de fonte e o que é estimativa sua."""

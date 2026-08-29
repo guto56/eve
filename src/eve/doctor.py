@@ -130,13 +130,16 @@ def check_tools(settings: Settings) -> Check:
     from eve.daemon.app import parse_overrides
     from eve.permissions import PermissionEngine
     from eve.tools.builtin import register_builtin_tools
+    from eve.tools.calendar_tools import register_calendar_tools
     from eve.tools.macos_tools import register_macos_tools
     from eve.tools.memory_tools import register_memory_tools
     from eve.tools.registry import ToolRegistry
     from eve.tools.web_tools import register_web_tools
 
-    registry = register_web_tools(
-        register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+    registry = register_calendar_tools(
+        register_web_tools(
+            register_memory_tools(register_macos_tools(register_builtin_tools(ToolRegistry())))
+        )
     )
     engine = PermissionEngine(
         overrides=parse_overrides(settings.permissions.overrides),

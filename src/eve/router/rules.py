@@ -80,12 +80,14 @@ def _original_span(original: str, normalized_match: re.Match[str], group: str) -
 
 LOOKS_LIKE_URL = re.compile(r"^(https?://|www\.)|\.[a-z]{2,}(/|$)")
 
-#: Palavras que, no começo do alvo, indicam arquivo/pasta e não aplicativo.
-FILE_WORDS = ("pasta ", "arquivo ", "diretorio ", "folder ", "file ")
-
 #: Um nome de aplicativo não começa com preposição nem com demonstrativo.
 #: "abre no navegador" não pede um app chamado "no navegador"; "abre essa
 #: pasta" não pede um app chamado "essa pasta". Os dois aconteceram.
+#: Alvo composto: "o YouTube e a cotação do dólar", "isso e aquilo em outra
+#: aba". Um nome de app não tem conjunção nem vírgula; a regra desiste e o
+#: modelo abre quantas abas forem precisas.
+MAIS_DE_UM = re.compile(r"\s+e\s+|,|\bem outra aba\b|\bnoutra aba\b|\bduas abas\b")
+
 NAO_E_NOME = re.compile(
     r"^(no|na|nos|nas|em|de|do|da|dos|das|com|para|pra|pelo|pela"
     r"|esse|essa|esses|essas|este|esta|isso|aquilo|aquele|aquela"
@@ -97,8 +99,10 @@ def _open_target(match: re.Match[str]) -> dict[str, Any] | None:
     alvo = match.group("alvo").strip()
     if not alvo or len(alvo) > 120:
         return None
-    if alvo.startswith(FILE_WORDS) or NAO_E_NOME.match(alvo):
-        return None  # não é nome de app: deixa o modelo decidir
+    if NAO_E_NOME.match(alvo) or MAIS_DE_UM.search(alvo):
+        return None  # "no navegador", "essa pasta", "X e Y": o modelo decide
+    # "pasta X" e "arquivo X" seguem em frente: quem resolve o tipo é a
+    # ferramenta, que sabe olhar o disco.
     return {"name": alvo}
 
 
@@ -108,7 +112,7 @@ def _open_url(match: re.Match[str]) -> dict[str, Any] | None:
         return None
     if not urlparse(alvo).scheme:
         alvo = f"https://{alvo}"
-    return {"url": alvo}
+    return {"urls": [alvo]}
 
 
 #: Pastas do macOS que a EVE resolve sozinha, em português e em inglês.
@@ -175,6 +179,10 @@ def _clipboard_text(match: re.Match[str]) -> dict[str, Any] | None:
 #: Marcas de pedido com várias etapas. Uma frase que começa com "pesquise" mas
 #: continua "compare preços e me recomende" não é uma busca: é uma tarefa. Na
 #: dúvida, a regra desiste e o classificador decide.
+#: "Abre o YouTube e a cotação do dólar" tem "cotação", mas não é uma busca:
+#: é um pedido de abrir. O verbo no começo manda mais que a palavra no meio.
+PEDE_ABERTURA = re.compile(r"^(abr[ae]|abrir|acesse|va para|coloca|poe|ponha)\b")
+
 MULTI_STEP = re.compile(
     r"\b(compare|comparar|comparando|e depois|em seguida|por fim"
     r"|e me (recomende|indique|sugira|diga qual)"
@@ -331,7 +339,7 @@ RULES: tuple[Rule, ...] = (
         r"^(pesquise|pesquisar|procure na internet|busque na web|search|google)\b"
         r"|(noticias|cotacao|previsao do tempo|ultimas novidades)\b",
         Route.WEB,
-        veto=MULTI_STEP,
+        veto=re.compile(f"({MULTI_STEP.pattern})|({PEDE_ABERTURA.pattern})"),
     ),
     rule(
         "memoria_gravar",

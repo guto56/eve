@@ -57,9 +57,23 @@ def test_empty_directory() -> None:
 
 
 def test_action_templates() -> None:
-    assert format_result("app.open", {"name": "Safari"}, {}) == "Abri Safari."
-    assert format_result("url.open", {"url": "https://x.com"}, {}) == "Abri https://x.com."
+    aberto = {"found": True, "opened": "Safari", "kind": "app"}
+    assert format_result("app.open", {"name": "Safari"}, aberto) == "Abri Safari."
+    uma_aba = {"opened": ["https://x.com"]}
+    assert format_result("url.open", {}, uma_aba) == "Abri https://x.com."
     assert format_result("system.set_volume", {"level": 40}, {}) == "Volume em 40%."
+
+
+def test_nao_achou_sugere_alternativa() -> None:
+    nada = {"found": False, "query": "xyz", "similar": ["Xcode"], "suggestion": "..."}
+    assert "Você quis dizer Xcode?" in format_result("app.open", {}, nada)
+
+    sem_parecidos = {"found": False, "query": "xyz", "similar": [], "suggestion": "..."}
+    assert "App Store" in format_result("app.open", {}, sem_parecidos)
+
+
+def test_varias_abas() -> None:
+    assert format_result("url.open", {}, {"opened": ["a", "b", "c"]}) == "Abri 3 abas."
 
 
 def test_unknown_tool_returns_none() -> None:

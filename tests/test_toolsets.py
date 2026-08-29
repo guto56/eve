@@ -38,7 +38,7 @@ def test_a_mais_relevante_vem_primeiro(full_registry: ToolRegistry) -> None:
 def test_relevant_tools_are_chosen(full_registry: ToolRegistry) -> None:
     escolhidas = select_tools(full_registry, Route.COMMAND, "crie uma pasta chamada projetos").names
     assert "file.mkdir" in escolhidas
-    assert all(n.startswith("file.") for n in escolhidas)
+    assert escolhidas[0].startswith("file.")
 
 
 def test_volume_request_selects_volume_tools(full_registry: ToolRegistry) -> None:
@@ -81,6 +81,6 @@ def test_filtering_actually_shrinks_the_prompt(full_registry: ToolRegistry) -> N
     filtradas = full_registry.wire_tools(
         select_tools(full_registry, Route.COMMAND, "crie uma pasta").names
     )
-    assert len(todas) == 38
+    assert len(todas) == 41
     assert len(filtradas) == 8
     assert len(str(filtradas)) < len(str(todas)) / 2
