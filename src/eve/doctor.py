@@ -250,6 +250,35 @@ def check_memory_store(settings: Settings) -> Check:
     return Check("Memória da EVE", Status.OK, f"{detalhe}, busca híbrida ativa")
 
 
+def check_extensions(settings: Settings) -> Check:
+    """Skills instaladas e servidores MCP declarados."""
+    from eve.secrets import build_store
+    from eve.skills.model import SkillError, load_skill
+
+    raiz = paths().ensure().skills
+    skills, quebradas, sem_credencial = [], [], []
+    store = build_store(paths().home / "secrets.json")
+    for diretorio in sorted(p for p in raiz.iterdir() if p.is_dir()):
+        try:
+            skill = load_skill(diretorio)
+        except SkillError:
+            quebradas.append(diretorio.name)
+            continue
+        skills.append(skill)
+        if skill.enabled and any(not store.has(n) for n in skill.requires_secrets):
+            sem_credencial.append(skill.name)
+
+    servidores = len(settings.mcp) + sum(len(s.mcp) for s in skills if s.enabled)
+    detalhe = f"{len(skills)} Skill(s), {servidores} servidor(es) MCP"
+    if quebradas:
+        return Check("Skills e MCP", Status.WARN, f"{detalhe}; inválida(s): {', '.join(quebradas)}")
+    if sem_credencial:
+        return Check(
+            "Skills e MCP", Status.WARN, f"{detalhe}; sem credencial: {', '.join(sem_credencial)}"
+        )
+    return Check("Skills e MCP", Status.OK, detalhe)
+
+
 def check_voice(_: Settings) -> Check:
     from eve.secrets import build_store
 
@@ -322,6 +351,7 @@ CHECKS: list[CheckFn] = [
     check_providers,
     check_memory_store,
     check_voice,
+    check_extensions,
     check_web,
     check_ollama,
 ]

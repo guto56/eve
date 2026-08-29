@@ -71,6 +71,7 @@ class ChatEngine:
         sessions: SessionStore | None = None,
         max_rounds: int = MAX_TOOL_ROUNDS,
         memory: Any = None,
+        skills: Any = None,
     ) -> None:
         self.router = router
         self.providers = providers
@@ -79,6 +80,7 @@ class ChatEngine:
         self.sessions = sessions or SessionStore()
         self.max_rounds = max_rounds
         self.memory = memory
+        self.skills = skills
         self._extracoes: set[asyncio.Task[Any]] = set()
 
     async def send(
@@ -248,8 +250,10 @@ class ChatEngine:
         # Contexto de memória entra aqui, não no histórico: é conhecimento
         # sobre o usuário, não algo que alguém disse nesta conversa.
         lembrado = await self._memory_context(text)
+        instrucoes = self.skills.instructions_for(text) if self.skills else ""
+        extra = "\n\n".join(p for p in (instrucoes, lembrado) if p)
         messages: list[Message] = [
-            system(system_prompt(with_tools=bool(wire_tools), extra=lembrado)),
+            system(system_prompt(with_tools=bool(wire_tools), extra=extra)),
             *session.history(),
         ]
         ultimo: tuple[ToolCall, ToolResult] | None = None

@@ -5,8 +5,10 @@ from eve.router.toolsets import keywords_for, select_tools, tokenize
 from eve.tools.registry import ToolRegistry
 
 
-def test_tokenize_drops_stopwords_and_accents() -> None:
-    assert tokenize("Abra a pasta de Documentos") == {"abra", "pasta", "documentos"}
+def test_tokenize_drops_stopwords_accents_and_plurals() -> None:
+    """Plural vira singular para "issues" casar com "create_issue"."""
+    assert tokenize("Abra a pasta de Documentos") == {"abra", "pasta", "documento"}
+    assert tokenize("issues") == tokenize("issue")
 
 
 def test_keywords_include_namespace_synonyms() -> None:

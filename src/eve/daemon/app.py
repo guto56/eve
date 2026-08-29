@@ -6,6 +6,7 @@ vive aqui, no daemon.
 
 from __future__ import annotations
 
+import asyncio
 import os
 import time
 from collections.abc import AsyncIterator
@@ -18,9 +19,11 @@ from eve.ai.manager import ProviderManager
 from eve.bus import EventBus
 from eve.chat.engine import ChatEngine
 from eve.config import Settings, load_settings
-from eve.daemon.routes import ai, chat, health, memory, tools, voice, web, ws
+from eve.daemon.routes import ai, chat, extensions, health, memory, tools, voice, web, ws
 from eve.events import EventType
 from eve.logging import get_logger
+from eve.mcp.client import MCPServerConfig
+from eve.mcp.manager import MCPManager
 from eve.memory.embeddings import Embedder
 from eve.memory.manager import MemoryManager
 from eve.memory.store import MemoryStore
@@ -28,6 +31,7 @@ from eve.paths import paths
 from eve.permissions import PermissionEngine
 from eve.router.router import Router
 from eve.secrets import build_store
+from eve.skills.manager import SkillManager
 from eve.tools.approvals import ApprovalBroker
 from eve.tools.audit import AuditLog
 from eve.tools.builtin import register_builtin_tools
@@ -44,6 +48,12 @@ log = get_logger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bus: EventBus = app.state.bus
     app.state.started_at = time.time()
+    # Servidores MCP podem demorar (npx baixa na primeira vez); subir em
+    # segundo plano deixa o Core disponível imediatamente.
+    conexoes = asyncio.create_task(
+        app.state.skills.connect_enabled(_standalone_servers(app.state.settings))
+    )
+
     await bus.emit(EventType.SYSTEM_STARTED, version=__version__, pid=os.getpid())
     log.info(
         "core.started", version=__version__, pid=os.getpid(), tools=len(app.state.tools.registry)
@@ -51,6 +61,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        conexoes.cancel()
+        await asyncio.gather(conexoes, return_exceptions=True)
+        await app.state.mcp.aclose()
         removidas = await app.state.memory.housekeeping()
         if removidas:
             log.info("memoria.expiradas_removidas", count=removidas)
@@ -79,13 +92,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.providers = ProviderManager(settings, app.state.secrets)
     app.state.memory = build_memory(settings, app.state.bus, app.state.providers)
     app.state.tools = build_tool_bus(settings, app.state.bus, {"memory": app.state.memory})
-    app.state.router = Router(app.state.tools.registry, app.state.providers)
+    app.state.mcp = MCPManager(app.state.tools.registry)
+    app.state.skills = SkillManager(paths().ensure().skills, app.state.secrets, app.state.mcp)
+    app.state.skills.load_all()
+    _apply_skill_permissions(app)
+    app.state.router = Router(
+        app.state.tools.registry,
+        app.state.providers,
+        extra_namespaces=app.state.skills.namespaces_for,
+    )
     app.state.chat = ChatEngine(
         router=app.state.router,
         providers=app.state.providers,
         tools=app.state.tools,
         bus=app.state.bus,
         memory=app.state.memory,
+        skills=app.state.skills,
     )
     app.include_router(health.router)
     app.include_router(ws.router)
@@ -94,6 +116,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router)
     app.include_router(memory.router)
     app.include_router(voice.router)
+    app.include_router(extensions.router)
     # A interface é montada por último: sua rota curinga não pode capturar
     # nada da API.
     web.mount(app)
@@ -129,6 +152,32 @@ def build_tool_bus(
         approvals=ApprovalBroker(settings.permissions.confirm_timeout),
         services=dict(services or {}),
     )
+
+
+def _standalone_servers(settings: Settings) -> list[MCPServerConfig]:
+    """Servidores MCP declarados direto no config.toml, fora de Skills."""
+    return [
+        MCPServerConfig(
+            name=item.name,
+            command=item.command,
+            args=list(item.args),
+            env=dict(item.env),
+            cwd=item.cwd,
+            url=item.url,
+            enabled=item.enabled,
+        )
+        for item in settings.mcp
+    ]
+
+
+def _apply_skill_permissions(app: FastAPI) -> None:
+    """Padrões das Skills por baixo, escolhas do usuário por cima.
+
+    Quem instala a Skill decide o padrão; quem usa decide o final.
+    """
+    engine = app.state.tools.permissions
+    das_skills = parse_overrides(app.state.skills.permission_overrides())
+    engine.overrides = {**das_skills, **engine.overrides}
 
 
 def parse_overrides(raw: dict[str, str]) -> dict[str, RiskLevel]:

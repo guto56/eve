@@ -60,6 +60,15 @@ async def status(request: Request) -> dict[str, Any]:
                 else "sem credencial"
             ),
         },
+        "skills": {
+            "installed": len(app.state.skills.skills),
+            "enabled": sum(1 for s in app.state.skills.skills.values() if s.enabled),
+        },
+        "mcp": {
+            "servers": len(app.state.mcp.connections),
+            "connected": sum(1 for c in app.state.mcp.connections.values() if c.connected),
+            "tools": app.state.mcp.tool_count,
+        },
         "memory": {
             "total": await app.state.memory.store.count(),
             "semantic_search": app.state.memory.store.vectors.available,

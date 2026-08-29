@@ -84,6 +84,18 @@ class VoiceSettings(BaseModel):
     """Interromper a fala da EVE quando o usuário começa a falar."""
 
 
+class MCPServerSettings(BaseModel):
+    """Servidor MCP avulso, fora de qualquer Skill (spec §20)."""
+
+    name: str
+    command: str = ""
+    args: list[str] = Field(default_factory=list)
+    env: dict[str, str] = Field(default_factory=dict)
+    cwd: str | None = None
+    url: str = ""
+    enabled: bool = True
+
+
 class PermissionSettings(BaseModel):
     """Política de permissões (spec §11).
 
@@ -116,6 +128,7 @@ class Settings(BaseSettings):
     files: FileSettings = FileSettings()
     memory: MemorySettings = MemorySettings()
     voice: VoiceSettings = VoiceSettings()
+    mcp: list[MCPServerSettings] = Field(default_factory=list)
 
     @classmethod
     def settings_customise_sources(

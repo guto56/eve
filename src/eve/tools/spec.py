@@ -115,6 +115,9 @@ class ToolSpec:
     params: type[ToolParams]
     risk: RiskLevel
     handler: Handler
+    raw_schema: dict[str, Any] | None = None
+    """Esquema cru, quando a ferramenta vem de fora (MCP) e não tem modelo
+    pydantic. Quando presente, substitui o esquema derivado de ``params``."""
     reversible: bool = True
     timeout: float = 30.0
     requires: tuple[str, ...] = ()
@@ -128,9 +131,23 @@ class ToolSpec:
 
     def json_schema(self) -> dict[str, Any]:
         """Esquema dos argumentos, no formato que os provedores de LLM aceitam."""
+        if self.raw_schema is not None:
+            return dict(self.raw_schema)
         schema = self.params.model_json_schema()
         schema.pop("title", None)
         return schema
+
+    def validate_args(self, args: dict[str, Any]) -> Any:
+        """Valida e devolve os argumentos prontos para o handler.
+
+        Ferramentas nativas recebem o modelo pydantic; as de MCP recebem o
+        dicionário, já conferido contra o JSON Schema declarado pelo servidor.
+        """
+        if self.raw_schema is not None:
+            from eve.mcp.schema import validate
+
+            return validate(args, self.raw_schema)
+        return self.params.model_validate(args)
 
     def as_wire_tool(self) -> dict[str, Any]:
         """Definição no formato de function calling aceito pelos provedores."""

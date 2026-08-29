@@ -116,13 +116,26 @@ class ToolBus:
         )
 
         try:
-            parsed = spec.params.model_validate(raw_args)
+            parsed = spec.validate_args(raw_args)
         except ValidationError as exc:
             return await self._fail(
                 request_id,
                 name,
                 "invalid_args",
                 _format_validation_error(exc),
+                spec.redact(raw_args),
+                started,
+                source,
+                caller,
+                spec=spec,
+            )
+        except ValueError as exc:
+            # Esquema cru (MCP) não levanta ValidationError do pydantic.
+            return await self._fail(
+                request_id,
+                name,
+                "invalid_args",
+                str(exc),
                 spec.redact(raw_args),
                 started,
                 source,

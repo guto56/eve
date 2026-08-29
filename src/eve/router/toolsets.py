@@ -41,8 +41,20 @@ SYNONYMS: dict[str, tuple[str, ...]] = {
 _WORD = re.compile(r"[a-z0-9]+")
 
 
+def _raiz(palavra: str) -> str:
+    """Normalização de plural, pobre e suficiente.
+
+    Sem isto, "issues" não casa com "list_issues" nem com "create_issue", e a
+    seleção enche as vagas por desempate alfabético. Um stemmer de verdade
+    seria melhor e mais caro; aqui basta aproximar singular e plural.
+    """
+    if len(palavra) > 3 and palavra.endswith("s") and not palavra.endswith("ss"):
+        return palavra[:-1]
+    return palavra
+
+
 def tokenize(text: str) -> set[str]:
-    return {w for w in _WORD.findall(strip_accents(text.lower())) if w not in STOPWORDS}
+    return {_raiz(w) for w in _WORD.findall(strip_accents(text.lower())) if w not in STOPWORDS}
 
 
 @dataclass(frozen=True)
@@ -65,9 +77,14 @@ def select_tools(
     route: Route,
     text: str,
     limit: int = DEFAULT_LIMIT,
+    extra_namespaces: tuple[str, ...] = (),
 ) -> ToolSelection:
-    """Ferramentas que valem a pena mandar ao modelo para esta mensagem."""
-    namespaces = NAMESPACES.get(route, ())
+    """Ferramentas que valem a pena mandar ao modelo para esta mensagem.
+
+    ``extra_namespaces`` vem das Skills ativas: uma Skill de GitHub só coloca
+    as ferramentas dela no prompt quando a mensagem tem a ver com GitHub.
+    """
+    namespaces = tuple(dict.fromkeys(NAMESPACES.get(route, ()) + extra_namespaces))
     if not namespaces:
         return ToolSelection((), f"rota {route.value} não usa ferramentas")
 

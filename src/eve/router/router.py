@@ -14,6 +14,7 @@ Três camadas, da mais barata para a mais cara:
 from __future__ import annotations
 
 import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
@@ -100,10 +101,12 @@ class Router:
         registry: ToolRegistry,
         providers: ProviderManager,
         tool_limit: int = DEFAULT_LIMIT,
+        extra_namespaces: Callable[[str], tuple[str, ...]] | None = None,
     ) -> None:
         self.registry = registry
         self.providers = providers
         self.tool_limit = tool_limit
+        self.extra_namespaces = extra_namespaces or (lambda _: ())
 
     async def route(self, text: str) -> RoutingDecision:
         started = time.perf_counter()
@@ -119,7 +122,7 @@ class Router:
                     rule=hit.rule,
                     latency_ms=(time.perf_counter() - started) * 1000,
                 )
-            selection = select_tools(self.registry, hit.route, text, self.tool_limit)
+            selection = self._select(hit.route, text)
             return RoutingDecision(
                 route=hit.route,
                 decided_by="rule",
@@ -130,13 +133,18 @@ class Router:
             )
 
         route, decided_by, reason = await self._classify(text)
-        selection = select_tools(self.registry, route, text, self.tool_limit)
+        selection = self._select(route, text)
         return RoutingDecision(
             route=route,
             decided_by=decided_by,
             reason=f"{reason}; {selection.reason}",
             tools=selection.names,
             latency_ms=(time.perf_counter() - started) * 1000,
+        )
+
+    def _select(self, route: Route, text: str):
+        return select_tools(
+            self.registry, route, text, self.tool_limit, self.extra_namespaces(text)
         )
 
     async def _classify(self, text: str) -> tuple[Route, Source, str]:

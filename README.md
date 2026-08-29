@@ -2,7 +2,7 @@
 
 Assistente pessoal de IA local-first para macOS.
 
-Estado: **Fase 8 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra e tem interface web. Veja [docs/PLANO.md](docs/PLANO.md).
+Estado: **Fase 9 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra, tem interface web e se estende por Skills e MCP. Veja [docs/PLANO.md](docs/PLANO.md).
 
 ## Instalação
 
@@ -69,6 +69,8 @@ uv run ruff check src tests
 | `eve chat [mensagem] [-v]` | conversa com a EVE (sem mensagem, abre um REPL) |
 | `eve memory list/search/add/forget/stats` | memória persistente |
 | `eve voice say "..."` · `eve voice test` | fala e diagnóstico de voz |
+| `eve skill list/install/remove/enable/disable` | Skills |
+| `eve mcp list/add/remove/reconnect/tools` | servidores MCP |
 
 ## Onde as coisas ficam
 
