@@ -86,16 +86,7 @@ instalar_brew() {
 }
 
 instalar_brew uv uv
-instalar_brew ollama ollama
-
-if ! pgrep -x ollama >/dev/null 2>&1; then
-  printf "    %s…%s subindo o Ollama\n" "$DIM" "$FIM"
-  brew services start ollama >/dev/null 2>&1 || ollama serve >/dev/null 2>&1 &
-  sleep 3
-fi
-curl -sf http://127.0.0.1:11434/api/version >/dev/null 2>&1 \
-  && ok "Ollama respondendo" \
-  || aviso "Ollama não respondeu — a IA local pode não funcionar"
+pulou "o Ollama vem depois — só se você escolher usar IA local"
 
 # ---------------------------------------------------------------- código
 
@@ -126,9 +117,23 @@ if ! tem eve; then
   export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# ---------------------------------------------------------------- modelos
+# --------------------------------------------------------------- escolhas
 
-passo "Baixando os modelos locais"
+passo "Configurando"
+
+# Com `curl | bash`, a entrada padrão é o próprio script: sem /dev/tty não há
+# como perguntar nada. Melhor dizer isso do que travar ou fingir que perguntou.
+if [ -e /dev/tty ] && [ -r /dev/tty ]; then
+  eve setup </dev/tty || aviso "o setup não terminou — rode 'eve setup' quando quiser"
+else
+  aviso "sem terminal para perguntar — rode 'eve setup' depois"
+fi
+
+MODO="$(eve config show --json 2>/dev/null \
+  | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin)["ai"]["mode"])' \
+  2>/dev/null || echo "hybrid")"
+
+# ---------------------------------------------------------------- modelos
 
 baixar_modelo() {
   # O Ollama lista "modelo:latest" quando a tag foi omitida.
@@ -142,8 +147,29 @@ baixar_modelo() {
   fi
 }
 
-baixar_modelo "$MODELO"
-baixar_modelo "$EMBEDDINGS"
+preparar_ia_local() {
+  instalar_brew ollama ollama
+
+  if ! pgrep -x ollama >/dev/null 2>&1; then
+    printf "    %s…%s subindo o Ollama\n" "$DIM" "$FIM"
+    brew services start ollama >/dev/null 2>&1 || ollama serve >/dev/null 2>&1 &
+    sleep 3
+  fi
+  curl -sf http://127.0.0.1:11434/api/version >/dev/null 2>&1 \
+    && ok "Ollama respondendo" \
+    || aviso "Ollama não respondeu — a IA local pode não funcionar"
+
+  baixar_modelo "$MODELO"
+  baixar_modelo "$EMBEDDINGS"
+}
+
+if [ "$MODO" = "external" ]; then
+  passo "IA local"
+  pulou "você escolheu só OpenRouter — nada para instalar nem baixar"
+else
+  passo "Preparando a IA local"
+  preparar_ia_local
+fi
 
 # ------------------------------------------------------------- navegador
 
@@ -169,12 +195,15 @@ mkdir -p "$HOME/EVE"
 ok "pasta $HOME/EVE"
 
 # Subir um processo em segundo plano que o usuário não vê nem sabe parar é
-# uma decisão dele, não nossa. O instalador prepara; quem começa é você.
+# uma decisão dele, não nossa — e ela já foi feita no setup. Aqui só resta o
+# atalho para quem instala sem terminal.
 if [ "${EVE_AUTOSTART:-}" = "1" ]; then
   eve service install >/dev/null 2>&1 \
     && ok "a EVE vai subir sozinha depois do login" \
     || aviso "não consegui instalar o serviço"
   sleep 3
+elif eve service installed >/dev/null 2>&1; then
+  pulou "serviço já configurado no setup"
 else
   pulou "não vou deixar nada rodando — você escolhe como começar"
 fi

@@ -102,6 +102,8 @@ def check_port(settings: Settings) -> Check:
 
 
 def check_ollama(settings: Settings) -> Check:
+    if settings.ai.mode == "external":
+        return Check("Ollama", Status.OK, "não usado — a EVE está no modo só nuvem")
     if shutil.which("ollama") is None:
         return Check("Ollama", Status.WARN, "não instalado — necessário para a IA local")
     try:
@@ -217,11 +219,15 @@ def check_providers(settings: Settings) -> Check:
 
     ok = [h.name for h in results if h.ok]
     bad = [f"{h.name} ({h.detail})" for h in results if not h.ok]
+    # O modo é a primeira coisa que explica o resto desta linha.
+    modo = "só nuvem" if settings.ai.mode == "external" else "local + nuvem"
     if not ok:
         return Check("Provedores de IA", Status.FAIL, "; ".join(bad) or "nenhum disponível")
     if bad:
-        return Check("Provedores de IA", Status.WARN, f"{', '.join(ok)} ok; problema em {bad[0]}")
-    return Check("Provedores de IA", Status.OK, ", ".join(ok))
+        return Check(
+            "Provedores de IA", Status.WARN, f"{modo}: {', '.join(ok)}; problema em {bad[0]}"
+        )
+    return Check("Provedores de IA", Status.OK, f"{modo}: {', '.join(ok)}")
 
 
 def check_memory_store(settings: Settings) -> Check:
@@ -248,6 +254,10 @@ def check_memory_store(settings: Settings) -> Check:
     if not stats["busca_semantica"]:
         return Check("Memória da EVE", Status.WARN, f"{detalhe}; sem sqlite-vec — só busca textual")
     if not tem_embedder:
+        if settings.ai.mode == "external":
+            # Embeddings são locais; no modo só nuvem a busca textual não é
+            # uma falha, é a consequência escolhida no setup.
+            return Check("Memória da EVE", Status.OK, f"{detalhe}, busca textual (modo só nuvem)")
         return Check(
             "Memória da EVE",
             Status.WARN,

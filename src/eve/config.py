@@ -35,6 +35,17 @@ class AISettings(BaseModel):
     11/13 do 0.8b e 1372 ms do 4b.
     """
 
+    mode: Literal["hybrid", "external"] = "hybrid"
+    """Onde a EVE pensa.
+
+    ``hybrid``: o modelo local resolve o barato e o repetitivo — classificar a
+    intenção, extrair memória, conversa curta — e o externo entra no que é
+    difícil. ``external``: nada roda nesta máquina; tudo vai para o OpenRouter.
+    Não exige baixar modelo nenhum, mas cada mensagem sai do computador e a
+    busca por significado na memória cai para busca textual, porque os
+    embeddings são locais.
+    """
+
     local_backend: Literal["ollama", "mlx"] = "ollama"
     ollama_host: str = "http://127.0.0.1:11434"
     local_model: str = "qwen3.5:2b"

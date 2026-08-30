@@ -1,7 +1,8 @@
 """Escolha e ciclo de vida dos provedores de IA.
 
-A EVE tem sempre um provedor local; o externo só existe se houver credencial.
-Quem chama pede pelo papel ("local" ou "external"), não pela implementação.
+Quem chama pede pelo papel ("local", "fast", "external", "heavy"), não pela
+implementação — e é isso que deixa o modo ``external`` funcionar sem mudar uma
+linha de quem usa: os papéis rápidos passam a apontar para o provedor externo.
 """
 
 from __future__ import annotations
@@ -65,8 +66,17 @@ class ProviderManager:
             return None
         return self._external
 
+    @property
+    def external_only(self) -> bool:
+        """Não há modelo nesta máquina: todo papel vai para fora."""
+        return self.settings.ai.mode == "external"
+
     def model_for(self, role: Role) -> str:
         ai = self.settings.ai
+        if self.external_only:
+            # O modelo externo padrão já é o barato e rápido do catálogo, que
+            # é justamente o que os papéis locais pedem.
+            return ai.external_heavy_model if role == "heavy" else ai.external_model
         return {
             "local": ai.local_model,
             "fast": ai.local_fast_model,
@@ -75,7 +85,7 @@ class ProviderManager:
         }[role]
 
     def provider_for(self, role: Role) -> Provider:
-        if role in ("local", "fast"):
+        if role in ("local", "fast") and not self.external_only:
             return self.local
         provider = self.external
         if provider is None:
@@ -87,7 +97,9 @@ class ProviderManager:
     # ------------------------------------------------------------- saúde
 
     async def health(self) -> list[ProviderHealth]:
-        checks = [self.local.health()]
+        # No modo externo o Ollama pode nem estar instalado; cobrá-lo seria
+        # inventar um problema que o usuário escolheu não ter.
+        checks = [] if self.external_only else [self.local.health()]
         external = self.external
         if external is not None:
             checks.append(external.health())

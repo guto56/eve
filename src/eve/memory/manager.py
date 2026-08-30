@@ -197,7 +197,7 @@ class MemoryManager:
             return []
 
         try:
-            resposta = await self.providers.local.chat(
+            resposta = await self.providers.provider_for("local").chat(
                 [system(EXTRACTION_SYSTEM), user(transcricao)],
                 model=self.providers.model_for("local"),
                 temperature=0,

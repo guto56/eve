@@ -11,16 +11,31 @@ curl -fsSL https://raw.githubusercontent.com/guto56/eve/main/install.sh | bash
 ```
 
 De uma cópia local do projeto, `./install.sh`. O instalador confere o
-computador, instala o que falta, baixa os modelos e cria `~/EVE`. Ele não
-deixa nada rodando: quem escolhe como a EVE começa é você. Rodar de novo é
-seguro — ele pula o que já está pronto e nunca toca em memória, credenciais ou
-configuração.
+computador, instala o que falta e cria `~/EVE`. Ele não deixa nada rodando:
+quem escolhe como a EVE começa é você. Rodar de novo é seguro — ele pula o que
+já está pronto e nunca toca em memória, credenciais ou configuração.
+
+No fim ele abre o `eve setup`, que pergunta o essencial: onde a EVE pensa,
+quais chaves você tem e se ela sobe sozinha. A primeira pergunta vem antes de
+qualquer download, porque é ela que decide se vale baixar os modelos locais.
 
 ```bash
 eve run                 # no terminal: você vê tudo, Ctrl+C encerra
 eve start && eve web    # em segundo plano (`eve stop` encerra)
-eve service install     # subir sozinha depois do login
+eve setup               # refazer as escolhas quando quiser
 ```
+
+## Onde a EVE pensa
+
+| Modo | O que roda aqui | O que isso custa |
+| --- | --- | --- |
+| `hybrid` (padrão) | o modelo pequeno classifica, extrai memória e responde o simples | ~2 GB de download; o difícil ainda vai para a nuvem |
+| `external` | nada | zero download, mas toda mensagem sai do computador e é cobrada, e a memória busca por texto em vez de por sentido |
+
+O modo fica em `ai.mode` no `config.toml`; `eve setup` grava e o Core aplica
+sem precisar de mais nada. No modo `external` os papéis rápidos (`local`,
+`fast`) passam a apontar para o modelo barato do OpenRouter, então nada no
+código precisa saber em que modo está.
 
 Para instalar já com o serviço, `EVE_AUTOSTART=1 ./install.sh`.
 
@@ -63,6 +78,7 @@ uv run ruff check src tests
 | `eve doctor [--json]` | diagnóstico da instalação |
 | `eve logs [-f] [-n N]` | logs do Core |
 | `eve web` | abre a interface (sobe o Core se preciso) |
+| `eve setup` | refaz as escolhas: modo, chaves e autostart |
 | `eve config path` | onde vivem configuração, banco e logs |
 | `eve config show [--json]` | configuração efetiva (arquivo + ambiente) |
 | `eve tool list/show/call` | ferramentas: listar, inspecionar, executar |

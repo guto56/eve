@@ -43,6 +43,12 @@ def service_uninstall() -> None:
     console.print("[dim]Memória, configuração e credenciais continuam onde estavam.[/dim]")
 
 
+@service_app.command("installed", hidden=True)
+def service_installed() -> None:
+    """Sai com 0 se o serviço está instalado. Existe para scripts perguntarem."""
+    raise typer.Exit(0 if service.installed() else 1)
+
+
 @service_app.command("status")
 def service_status() -> None:
     """Mostra se o serviço está instalado e rodando."""

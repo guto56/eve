@@ -236,7 +236,7 @@ class ChatEngine:
         """Último recurso: o modelo `fast` transforma o resultado em frase."""
         payload = json.dumps(result.value, ensure_ascii=False, default=str)[:2000]
         try:
-            resposta = await self.providers.local.chat(
+            resposta = await self.providers.provider_for("fast").chat(
                 [
                     system(PHRASE_SYSTEM),
                     user(f"Ferramenta: {call.name}\nResultado: {payload}"),

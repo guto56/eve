@@ -149,7 +149,7 @@ class Router:
 
     async def _classify(self, text: str) -> tuple[Route, Source, str]:
         try:
-            result = await self.providers.local.chat(
+            result = await self.providers.provider_for("local").chat(
                 [system(CLASSIFIER_SYSTEM), user(text)],
                 model=self.providers.model_for("local"),
                 temperature=0,

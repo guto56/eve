@@ -26,6 +26,7 @@ from eve.cli.memory_cmd import memory_app
 from eve.cli.service_cmd import service_app
 from eve.cli.service_cmd import uninstall as uninstall_cmd
 from eve.cli.service_cmd import update as update_cmd
+from eve.cli.setup_cmd import setup as setup_cmd
 from eve.cli.task_cmd import task_app
 from eve.cli.tools_cmd import permission_app, tool_app
 from eve.cli.voice_cmd import voice_app
@@ -68,6 +69,7 @@ app.add_typer(mcp_app)
 app.add_typer(task_app)
 app.add_typer(watch_app)
 app.add_typer(service_app)
+app.command(name="setup")(setup_cmd)
 app.command(name="update")(update_cmd)
 app.command(name="uninstall")(uninstall_cmd)
 app.command(name="ask")(ask)
