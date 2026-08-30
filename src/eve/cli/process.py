@@ -49,6 +49,27 @@ def pid_alive(pid: int) -> bool:
     return True
 
 
+def esta_zumbi(pid: int) -> bool:
+    """Já morreu e só falta o pai colhê-lo?
+
+    ``os.kill(pid, 0)`` continua tendo sucesso num zumbi, e ``_reap_if_zombie``
+    só funciona para os nossos filhos. Sem esta checagem, encerrar um
+    ``eve run`` cujo pai ainda não o colheu era relatado como fracasso — e o
+    comando que existe para dar certeza passava a mentir.
+    """
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "state="],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False
+    return result.stdout.strip().startswith("Z")
+
+
 def process_command(pid: int) -> str:
     """Linha de comando do processo, ou string vazia se ele não existir."""
     try:
@@ -98,20 +119,26 @@ def _home_of(pid: int) -> Path | None:
     return Path.home() / ".eve"
 
 
+#: O daemon em segundo plano e o ``eve run`` preso ao terminal servem o mesmo
+#: Core na mesma porta. Para quem digita ``eve stop``, os dois são "a EVE".
+PADRAO_PROCESSO = r"eve[.]daemon|bin/eve run"
+
+
 def daemon_pids() -> list[int]:
-    """Daemons da EVE desta ``EVE_HOME``, estejam no pidfile ou não.
+    """Processos da EVE desta ``EVE_HOME``, estejam no pidfile ou não.
 
     O pidfile guarda um processo; a máquina pode ter mais — um daemon que
-    sobreviveu a um encerramento mal-sucedido, outro subido de outro terminal.
-    Um ``eve stop`` que olha só o pidfile responde "não está rodando" com a EVE
-    no ar, que é exatamente a incerteza que o comando existe para eliminar.
+    sobreviveu a um encerramento mal-sucedido, um ``eve run`` aberto noutro
+    terminal. Um ``eve stop`` que olha só o pidfile responde "não está rodando"
+    com a EVE no ar, que é exatamente a incerteza que o comando existe para
+    eliminar.
 
     O filtro por ``EVE_HOME`` não é detalhe: sem ele um teste isolado varreria
     a EVE de verdade do usuário.
     """
     try:
         result = subprocess.run(
-            ["pgrep", "-u", str(os.getuid()), "-f", "eve[.]daemon"],
+            ["pgrep", "-u", str(os.getuid()), "-f", PADRAO_PROCESSO],
             capture_output=True,
             text=True,
             timeout=3,
@@ -217,6 +244,8 @@ def terminate(pid: int, timeout: float = 10.0) -> bool:
         if not pid_alive(pid):
             return True
         time.sleep(0.1)
+    if esta_zumbi(pid):
+        return True
 
     try:
         os.kill(pid, signal.SIGKILL)
@@ -230,4 +259,4 @@ def terminate(pid: int, timeout: float = 10.0) -> bool:
         if not pid_alive(pid):
             return True
         time.sleep(0.1)
-    return False
+    return esta_zumbi(pid)

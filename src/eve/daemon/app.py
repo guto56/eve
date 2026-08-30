@@ -68,6 +68,26 @@ from eve.websearch.tavily import TavilySearch
 log = get_logger(__name__)
 
 
+PRAZO_ENCERRAMENTO = 5.0
+"""Quanto cada etapa do desligamento pode demorar antes de ser abandonada.
+
+Um servidor MCP que não responde — ``npx`` baixando o pacote na primeira vez,
+por exemplo — segurava o processo inteiro, e o Ctrl+C parecia não funcionar.
+Nenhuma faxina vale prender o computador do usuário.
+"""
+
+
+async def _com_prazo(etapa: str, tarefa: Any, prazo: float = PRAZO_ENCERRAMENTO) -> Any:
+    """Espera ``tarefa`` até ``prazo``; desiste dela sem derrubar o resto."""
+    try:
+        return await asyncio.wait_for(tarefa, timeout=prazo)
+    except TimeoutError:
+        log.warning("core.encerramento_demorou", etapa=etapa, prazo=prazo)
+    except Exception as exc:  # pragma: no cover - defensivo no caminho de saída
+        log.warning("core.encerramento_falhou", etapa=etapa, error=str(exc))
+    return None
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bus: EventBus = app.state.bus
@@ -88,25 +108,29 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        # Primeiro o aviso, depois a faxina: quem apertou Ctrl+C precisa ver
+        # que foi ouvido agora, não depois que tudo fechou.
+        await bus.emit(EventType.SYSTEM_STOPPING)
+        log.info("core.stopping")
+
         conexoes.cancel()
-        await asyncio.gather(conexoes, return_exceptions=True)
-        await app.state.watch.aclose()
-        await app.state.proactive.stop()
-        await app.state.tasks.aclose()
-        await app.state.mcp.aclose()
-        await app.state.browser.close()
+        await _com_prazo("mcp.conexoes", asyncio.gather(conexoes, return_exceptions=True))
+        await _com_prazo("watchers", app.state.watch.aclose())
+        await _com_prazo("proatividade", app.state.proactive.stop())
+        await _com_prazo("tarefas", app.state.tasks.aclose())
+        await _com_prazo("mcp", app.state.mcp.aclose())
+        await _com_prazo("navegador", app.state.browser.close())
         if app.state.search is not None:
-            await app.state.search.aclose()
-        removidas = await app.state.memory.housekeeping()
+            await _com_prazo("pesquisa", app.state.search.aclose())
+        removidas = await _com_prazo("memoria.faxina", app.state.memory.housekeeping())
         if removidas:
             log.info("memoria.expiradas_removidas", count=removidas)
         cancelled = app.state.tools.approvals.deny_all("o Core está encerrando")
         if cancelled:
             log.info("approvals.cancelled", count=cancelled)
-        await app.state.memory.aclose()
-        await app.state.providers.aclose()
-        await bus.emit(EventType.SYSTEM_STOPPING)
-        log.info("core.stopping")
+        await _com_prazo("memoria", app.state.memory.aclose())
+        # Por último e com prazo maior: é o que devolve a RAM do modelo local.
+        await _com_prazo("provedores", app.state.providers.aclose(), prazo=8.0)
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:

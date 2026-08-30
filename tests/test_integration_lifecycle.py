@@ -311,3 +311,35 @@ def test_chat_requires_a_running_core(monkeypatch: pytest.MonkeyPatch) -> None:
     result = runner.invoke(app, ["chat", "oi"])
     assert result.exit_code == 1
     assert "não está rodando" in result.output
+
+
+async def test_encerramento_desiste_de_etapa_travada() -> None:
+    """Ctrl+C só vale se encerrar.
+
+    Um servidor MCP que não responde — `npx` baixando o pacote na primeira vez —
+    segurava o desligamento inteiro, e o Ctrl+C parecia não funcionar.
+    """
+    import asyncio
+
+    from eve.daemon.app import _com_prazo
+
+    async def nunca_termina() -> str:
+        await asyncio.sleep(3600)
+        return "nunca"
+
+    inicio = asyncio.get_running_loop().time()
+    assert await _com_prazo("teste", nunca_termina(), prazo=0.2) is None
+    assert asyncio.get_running_loop().time() - inicio < 2
+
+    async def termina() -> str:
+        return "pronto"
+
+    assert await _com_prazo("teste", termina(), prazo=5) == "pronto"
+
+
+def test_stop_encontra_o_eve_run_e_nao_so_o_daemon() -> None:
+    """Para quem digita `eve stop`, o daemon e o `eve run` são a mesma EVE."""
+    from eve.cli.process import PADRAO_PROCESSO
+
+    assert "eve[.]daemon" in PADRAO_PROCESSO
+    assert "bin/eve run" in PADRAO_PROCESSO

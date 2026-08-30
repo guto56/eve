@@ -10,6 +10,10 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import os
+import signal
+import sys
+from collections.abc import Iterator
 from datetime import datetime
 from typing import Any
 
@@ -45,6 +49,50 @@ TOPICOS = (
 )
 
 
+PRAZO_SAIDA = 12.0
+"""Quanto o desligamento inteiro pode demorar antes de sairmos à força.
+
+Ctrl+C só vale se encerrar. Uma etapa emperrada — um servidor MCP que não
+responde, uma conexão que não fecha — não pode transformar "parar" em "torcer
+para parar".
+"""
+
+
+class _Servidor(uvicorn.Server):
+    """Uvicorn sem os próprios tratadores de sinal.
+
+    Os dele apenas marcam ``should_exit`` e ficam calados; quem apertou Ctrl+C
+    fica olhando uma tela parada sem saber se foi ouvido.
+    """
+
+    @contextlib.contextmanager
+    def capture_signals(self) -> Iterator[None]:
+        yield
+
+
+def _atender_ctrl_c(servidor: uvicorn.Server) -> None:
+    """Responde na hora, com prazo, e sai à força se insistirem."""
+    laco = asyncio.get_running_loop()
+    pedidos = 0
+
+    def forcar(motivo: str) -> None:
+        console.print(f"\n[yellow]{motivo}[/yellow]")
+        sys.stdout.flush()
+        os._exit(130)
+
+    def parar() -> None:
+        nonlocal pedidos
+        pedidos += 1
+        if pedidos > 1:
+            forcar("Encerrando à força.")
+        console.print("\n[yellow]encerrando[/yellow] [dim]— Ctrl+C de novo força a saída[/dim]")
+        servidor.should_exit = True
+        laco.call_later(PRAZO_SAIDA, forcar, f"O desligamento passou de {PRAZO_SAIDA:.0f}s.")
+
+    for sinal in (signal.SIGINT, signal.SIGTERM):
+        laco.add_signal_handler(sinal, parar)
+
+
 async def serve(settings: Settings, verbose: bool = False) -> None:
     """Sobe a EVE e acompanha até o Ctrl+C."""
     p = paths().ensure()
@@ -68,8 +116,11 @@ async def serve(settings: Settings, verbose: bool = False) -> None:
         port=settings.server.port,
         log_config=None,
         access_log=False,
+        # Uma conexão aberta não pode segurar o Ctrl+C.
+        timeout_graceful_shutdown=int(PRAZO_SAIDA),
     )
-    servidor = uvicorn.Server(config)
+    servidor = _Servidor(config)
+    _atender_ctrl_c(servidor)
 
     try:
         await servidor.serve()
@@ -110,7 +161,8 @@ def _linha(evento: Event) -> str:
         case "system.started":
             return "[green]no ar[/green]"
         case "system.stopping":
-            return "[yellow]encerrando[/yellow]"
+            # Quem apertou Ctrl+C já foi avisado na hora, por _atender_ctrl_c.
+            return ""
         case "message.received":
             return f"[bold]>[/bold] {_curto(dados.get('text'), 90)}"
         case "message.completed":
