@@ -14,7 +14,7 @@ from rich.table import Table
 from eve.cli import process
 from eve.config import load_settings
 from eve.paths import paths
-from eve.secrets import InvalidSecretName, build_store
+from eve.secrets import KNOWN_SECRETS, InvalidSecretName, build_store
 
 console = Console()
 err_console = Console(stderr=True)
@@ -75,6 +75,12 @@ def key_list(
         table.add_row(marca, item["name"], valor, f"[dim]{item['description']}[/dim]")
     console.print(table)
 
+    faltando = store.missing_required()
+    if faltando:
+        console.print(f"\n[yellow]Falta:[/yellow] {', '.join(faltando)}")
+        console.print(f"[dim]grave com:[/dim] [cyan]eve key set {faltando[0]}[/cyan]")
+        console.print("[dim]o nome fica como está; a chave você cola no prompt seguinte[/dim]")
+
 
 @key_app.command("set")
 def key_set(
@@ -84,8 +90,24 @@ def key_set(
         typer.Option("--value", help="Evite: fica no histórico do shell. Prefira o prompt."),
     ] = None,
 ) -> None:
-    """Grava uma credencial no Keychain."""
-    secret = value or typer.prompt(f"Valor de {name}", hide_input=True)
+    """Grava uma credencial no Keychain.
+
+    O NOME é o que vai no comando; a chave em si você cola no prompt seguinte,
+    que não mostra o que foi digitado:
+
+        eve key set OPENROUTER_API_KEY
+        Cole a chave de OPENROUTER_API_KEY (não aparece na tela):
+
+    `eve key list` mostra os nomes que a EVE conhece e o que já está gravado.
+    """
+    if not value and name not in KNOWN_SECRETS:
+        conhecidas = ", ".join(sorted(KNOWN_SECRETS))
+        console.print(f"[dim]{name} não é uma das credenciais que a EVE usa.[/dim]")
+        console.print(f"[dim]conhecidas: {conhecidas}[/dim]")
+        if not typer.confirm(f"Gravar {name} assim mesmo?", default=False):
+            raise typer.Exit(0)
+
+    secret = value or typer.prompt(f"Cole a chave de {name} (não aparece na tela)", hide_input=True)
     try:
         _store().set(name, secret)
     except (InvalidSecretName, ValueError) as exc:

@@ -11,15 +11,18 @@ curl -fsSL https://raw.githubusercontent.com/guto56/eve/main/install.sh | bash
 ```
 
 De uma cópia local do projeto, `./install.sh`. O instalador confere o
-computador, instala o que falta, baixa os modelos, cria `~/EVE`, deixa a EVE
-subindo sozinha depois do login e abre a interface. Rodar de novo é seguro:
-ele pula o que já está pronto e nunca toca em memória, credenciais ou
+computador, instala o que falta, baixa os modelos e cria `~/EVE`. Ele não
+deixa nada rodando: quem escolhe como a EVE começa é você. Rodar de novo é
+seguro — ele pula o que já está pronto e nunca toca em memória, credenciais ou
 configuração.
 
 ```bash
-eve run                 # no terminal, com acompanhamento ao vivo
-eve start && eve web    # em segundo plano
+eve run                 # no terminal: você vê tudo, Ctrl+C encerra
+eve start && eve web    # em segundo plano (`eve stop` encerra)
+eve service install     # subir sozinha depois do login
 ```
+
+Para instalar já com o serviço, `EVE_AUTOSTART=1 ./install.sh`.
 
 Sem instalar, tudo funciona com `uv run eve ...` de dentro do projeto.
 
@@ -79,6 +82,23 @@ uv run ruff check src tests
 | `eve watch add/list/remove/status/simulate` | observadores e proatividade |
 | `eve service install/uninstall/status` | subir sozinha depois do login |
 | `eve update` · `eve uninstall` | atualizar e remover, preservando seus dados |
+
+## Credenciais
+
+Ficam no Keychain do macOS, nunca em arquivo. No comando vai só o **nome** da
+credencial; a chave em si você cola no prompt seguinte, que não mostra o que
+foi digitado:
+
+```bash
+eve key set OPENROUTER_API_KEY
+```
+
+```
+Cole a chave de OPENROUTER_API_KEY (não aparece na tela):
+```
+
+`eve key list` mostra os nomes que a EVE conhece, quais já estão gravados e o
+que ainda falta.
 
 ## Onde as coisas ficam
 

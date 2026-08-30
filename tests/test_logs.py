@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from eve.daemon.app import create_app
-from eve.daemon.routes.logs import _analisar
+from eve.daemon.routes.logs import _analisar, stream_logs
 from eve.paths import paths
 
 
@@ -71,25 +73,51 @@ def test_websocket_entrega_historico_ao_conectar() -> None:
     assert primeiro["replay"] is True
 
 
-def test_stream_acompanha_o_arquivo_ao_vivo() -> None:
+async def test_stream_acompanha_o_arquivo_ao_vivo() -> None:
     """O barramento tem o que a EVE faz; o arquivo tem o resto — uvicorn,
-    avisos de biblioteca, tudo que nunca vira evento."""
+    avisos de biblioteca, tudo que nunca vira evento.
+
+    Consome o gerador direto: o TestClient roda a app até o fim antes de
+    devolver a resposta, e uma resposta que por natureza não termina o
+    penduraria para sempre. O ``wait_for`` é o que garante que uma regressão
+    aqui vire falha em segundos em vez de uma suíte travada.
+    """
     p = paths().ensure()
     p.log_file.write_text("linha antiga\n", encoding="utf-8")
 
-    with TestClient(create_app()) as client:
-        with client.stream("GET", "/api/logs/stream", params={"source": "eve"}) as resposta:
-            assert resposta.status_code == 200
-            assert "text/event-stream" in resposta.headers["content-type"]
-            with p.log_file.open("a", encoding="utf-8") as fh:
-                fh.write("2026-08-30T10:00:00Z [warning  ] algo.novo  x=1\n")
-            for linha in resposta.iter_lines():
-                if linha.startswith("data:"):
-                    entrada = json.loads(linha[5:])
-                    break
+    resposta = await stream_logs(_pedido_vivo(), source="eve")
+    gerador = resposta.body_iterator
+
+    async def escrever_depois() -> None:
+        # Depois: o gerador só marca onde o arquivo estava quando começa a
+        # ser consumido, e o que interessa é o que chega dali para frente.
+        await asyncio.sleep(0.3)
+        with p.log_file.open("a", encoding="utf-8") as fh:
+            fh.write("2026-08-30T10:00:00Z [warning  ] algo.novo  x=1\n")
+
+    escritor = asyncio.create_task(escrever_depois())
+    try:
+        pedaco = await asyncio.wait_for(anext(gerador), timeout=10)
+    finally:
+        await escritor
+        await gerador.aclose()
+
     # Só o que chegou depois de conectar; a linha antiga não é reenviada.
+    entrada = json.loads(pedaco.removeprefix("data: "))
     assert entrada["event"] == "algo.novo"
     assert entrada["level"] == "warning"
+
+
+def _pedido_vivo() -> Request:
+    """Requisição que nunca desconecta, para o gerador seguir acompanhando."""
+
+    async def receive() -> dict[str, str]:  # pragma: no cover - cancelado antes de retornar
+        await asyncio.sleep(3600)
+        return {"type": "http.disconnect"}
+
+    return Request(
+        {"type": "http", "method": "GET", "path": "/api/logs/stream", "headers": []}, receive
+    )
 
 
 def test_stream_recusa_fonte_desconhecida() -> None:

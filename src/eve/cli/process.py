@@ -73,6 +73,65 @@ def is_eve_daemon(pid: int) -> bool:
     return "eve.daemon" in process_command(pid)
 
 
+def _home_of(pid: int) -> Path | None:
+    """A ``EVE_HOME`` sob a qual o processo roda, lida do ambiente dele.
+
+    ``None`` quando não dá para saber — e aí o processo não é tratado como
+    nosso, porque errar para o lado de não matar é o único erro barato aqui.
+    """
+    try:
+        result = subprocess.run(
+            ["ps", "-E", "-p", str(pid), "-o", "command="],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    for pedaco in result.stdout.split():
+        if pedaco.startswith("EVE_HOME="):
+            return Path(pedaco.removeprefix("EVE_HOME=")).expanduser()
+    # Sem a variável, o daemon usa o padrão — o mesmo que ``eve_home()`` usaria.
+    return Path.home() / ".eve"
+
+
+def daemon_pids() -> list[int]:
+    """Daemons da EVE desta ``EVE_HOME``, estejam no pidfile ou não.
+
+    O pidfile guarda um processo; a máquina pode ter mais — um daemon que
+    sobreviveu a um encerramento mal-sucedido, outro subido de outro terminal.
+    Um ``eve stop`` que olha só o pidfile responde "não está rodando" com a EVE
+    no ar, que é exatamente a incerteza que o comando existe para eliminar.
+
+    O filtro por ``EVE_HOME`` não é detalhe: sem ele um teste isolado varreria
+    a EVE de verdade do usuário.
+    """
+    try:
+        result = subprocess.run(
+            ["pgrep", "-u", str(os.getuid()), "-f", "eve[.]daemon"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+
+    nossa = paths().home.resolve()
+    meu = os.getpid()
+    encontrados = []
+    for linha in result.stdout.split():
+        if not linha.isdigit() or int(linha) == meu:
+            continue
+        alheia = _home_of(int(linha))
+        if alheia is not None and alheia.resolve() == nossa:
+            encontrados.append(int(linha))
+    return encontrados
+
+
 def running_pid(pid_file: Path | None = None) -> int | None:
     pid = read_pid(pid_file)
     if pid is None:

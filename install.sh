@@ -168,25 +168,47 @@ passo "Deixando a EVE pronta"
 mkdir -p "$HOME/EVE"
 ok "pasta $HOME/EVE"
 
-eve service install >/dev/null 2>&1 \
-  && ok "a EVE vai subir sozinha depois do login" \
-  || aviso "não consegui instalar o serviço — use 'eve start' quando quiser"
-
-sleep 3
+# Subir um processo em segundo plano que o usuário não vê nem sabe parar é
+# uma decisão dele, não nossa. O instalador prepara; quem começa é você.
+if [ "${EVE_AUTOSTART:-}" = "1" ]; then
+  eve service install >/dev/null 2>&1 \
+    && ok "a EVE vai subir sozinha depois do login" \
+    || aviso "não consegui instalar o serviço"
+  sleep 3
+else
+  pulou "não vou deixar nada rodando — você escolhe como começar"
+fi
 
 # ------------------------------------------------------------ conferindo
 
 passo "Conferindo"
 eve doctor || true
 
-printf "\n  %sEVE instalada.%s\n\n" "$BOLD$VERDE" "$FIM"
+printf "\n  %sEVE instalada.%s\n" "$BOLD$VERDE" "$FIM"
+
+# Credenciais: só avisa o que realmente falta, e explica como se faz.
+FALTANDO="$(eve key list --json 2>/dev/null \
+  | /usr/bin/python3 -c 'import sys,json; print(" ".join(json.load(sys.stdin)["missing"]))' \
+  2>/dev/null || echo "")"
+
+if [ -n "$FALTANDO" ]; then
+  printf "\n  %sFalta uma credencial:%s %s\n" "$AMARELO" "$FIM" "$FALTANDO"
+  for chave in $FALTANDO; do
+    printf "    %seve key set %s%s\n" "$CIANO" "$chave" "$FIM"
+  done
+  printf "    %so nome fica como está — a chave você digita depois, oculta%s\n" "$DIM" "$FIM"
+  printf "    %seve key list%s     mostra o que já está no Keychain\n" "$CIANO" "$FIM"
+fi
+
+printf "\n  %sPara começar:%s\n" "$BOLD" "$FIM"
+printf "    %seve run%s          roda no terminal — você vê tudo, Ctrl+C encerra\n" "$CIANO" "$FIM"
+printf "    %seve start%s        roda em segundo plano (%seve stop%s encerra)\n" \
+  "$CIANO" "$FIM" "$CIANO" "$FIM"
+printf "\n  %sDepois:%s\n" "$BOLD" "$FIM"
 printf "    %seve%s              abre a interface\n" "$CIANO" "$FIM"
-printf "    %seve run%s          roda no terminal, com acompanhamento\n" "$CIANO" "$FIM"
 printf "    %seve chat \"oi\"%s    conversa pelo terminal\n" "$CIANO" "$FIM"
 printf "    %seve doctor%s       diagnóstico\n" "$CIANO" "$FIM"
-printf "    %seve uninstall%s    remove tudo (preserva seus dados)\n" "$CIANO" "$FIM"
-printf "\n  %sFalta configurar as credenciais:%s eve key set OPENROUTER_API_KEY\n\n" "$DIM" "$FIM"
-
-if [ -t 1 ] && curl -sf http://127.0.0.1:4242/health >/dev/null 2>&1; then
-  open "http://127.0.0.1:4242" 2>/dev/null || true
+if [ "${EVE_AUTOSTART:-}" != "1" ]; then
+  printf "    %seve service install%s  faz subir sozinha depois do login\n" "$CIANO" "$FIM"
 fi
+printf "    %seve uninstall%s    remove tudo (preserva seus dados)\n\n" "$CIANO" "$FIM"

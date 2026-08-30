@@ -175,16 +175,20 @@ def stop() -> None:
         err_console.print("[red]O serviço não parou.[/red] Veja `eve service status`.")
         raise typer.Exit(1)
 
+    # Não basta encerrar o do pidfile: `eve stop` só vale se, depois dele,
+    # não sobrar nenhuma EVE rodando.
     pid = process.running_pid()
-    if pid is None:
+    alvos = dict.fromkeys(([pid] if pid else []) + process.daemon_pids())
+    if not alvos:
         console.print("[yellow]A EVE não está rodando.[/yellow]")
         raise typer.Exit(0)
-    if process.terminate(pid):
-        process.clear_pid()
-        console.print(f"[green]EVE parada[/green] (pid {pid}).")
-    else:
-        err_console.print(f"[red]Não foi possível encerrar o pid {pid}.[/red]")
+
+    teimosos = [alvo for alvo in alvos if not process.terminate(alvo)]
+    process.clear_pid()
+    if teimosos:
+        err_console.print(f"[red]Não consegui encerrar:[/red] pid {', '.join(map(str, teimosos))}")
         raise typer.Exit(1)
+    console.print(f"[green]EVE parada[/green] (pid {', '.join(map(str, alvos))}).")
 
 
 @app.command()
@@ -201,10 +205,11 @@ def restart() -> None:
         err_console.print("[red]O serviço não voltou.[/red]")
         raise typer.Exit(1)
 
+    # Mesma razão do `stop`: um daemon esquecido segura a porta e o novo não sobe.
     pid = process.running_pid()
-    if pid is not None:
-        process.terminate(pid)
-        process.clear_pid()
+    for alvo in dict.fromkeys(([pid] if pid else []) + process.daemon_pids()):
+        process.terminate(alvo)
+    process.clear_pid()
     settings = load_settings()
     new_pid = process.spawn_daemon(settings)
     if process.wait_for_health(settings) is None:
