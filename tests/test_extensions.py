@@ -182,6 +182,46 @@ def test_ligar_e_desligar_persiste(tmp_path: Path, secret_store) -> None:
     assert load_skill(tmp_path / "github").enabled is True
 
 
+def test_ligar_a_skill_nao_mexe_no_servidor_mcp(tmp_path: Path, secret_store) -> None:
+    """Regressão: a edição do manifesto apagava qualquer linha começada em
+    "enabled" — inclusive a de dentro de `[[mcp]]`. Como o padrão do servidor
+    é ligado, um MCP que o usuário tinha desativado voltava a ligar sozinho ao
+    mexer na Skill."""
+    manager = SkillManager(tmp_path, secret_store, MCPManager(ToolRegistry()))
+    skill = manager.install("github")
+    manifesto = skill.path / "skill.toml"
+
+    texto = manifesto.read_text(encoding="utf-8")
+    manifesto.write_text(
+        texto.replace('command = "npx"', 'command = "npx"\nenabled = false'), encoding="utf-8"
+    )
+
+    manager.load_all()
+    manager.set_enabled("github", False)
+    manager.set_enabled("github", True)
+
+    recarregada = load_skill(tmp_path / "github")
+    assert recarregada.enabled is True
+    assert recarregada.mcp[0].enabled is False, "o servidor MCP desativado voltou a ligar"
+
+
+def test_comentario_e_texto_do_manifesto_sobrevivem(tmp_path: Path, secret_store) -> None:
+    """Editar o manifesto não pode reescrever o que o usuário escreveu nele."""
+    manager = SkillManager(tmp_path, secret_store, MCPManager(ToolRegistry()))
+    skill = manager.install("github")
+    manifesto = skill.path / "skill.toml"
+    manifesto.write_text(
+        "# nota do usuário\n" + manifesto.read_text(encoding="utf-8"), encoding="utf-8"
+    )
+
+    manager.load_all()
+    manager.set_enabled("github", False)
+
+    texto = manifesto.read_text(encoding="utf-8")
+    assert "# nota do usuário" in texto
+    assert load_skill(tmp_path / "github").instructions.strip()
+
+
 # ---------------------------------------------------------------------- MCP
 
 

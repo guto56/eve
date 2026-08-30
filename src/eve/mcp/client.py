@@ -77,8 +77,11 @@ class MCPConnection:
 
     async def connect(self) -> bool:
         """Sobe o servidor e descobre as ferramentas. ``False`` se falhar."""
-        if self._task is not None:
+        if self._task is not None and not self._task.done():
             return self.connected
+        # Tarefa terminada é tentativa passada, não conexão viva: sem isto,
+        # um `connect` depois de uma falha devolvia False sem tentar de novo.
+        self._task = None
         self._stop.clear()
         self._ready.clear()
         self.error = None

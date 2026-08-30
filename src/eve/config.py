@@ -10,11 +10,14 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from eve.logging import get_logger
 from eve.macos.safepath import DEFAULT_ALLOWED_ROOTS, DEFAULT_DENIED
 from eve.paths import paths
+
+log = get_logger(__name__)
 
 
 class ServerSettings(BaseModel):
@@ -112,7 +115,24 @@ class ProactiveSettings(BaseModel):
     evento para pouca utilidade até existir uma regra que use isso."""
     rules: dict[str, str] = Field(default_factory=dict)
     quiet_hours: list[int] | None = None
+    """Faixa ``[início, fim]`` em que nada interrompe. Ex.: ``[22, 8]``."""
     min_interval: float = Field(default=60.0, ge=0)
+
+    @field_validator("quiet_hours")
+    @classmethod
+    def _duas_horas_validas(cls, valor: list[int] | None) -> list[int] | None:
+        """Configuração torta desliga o silêncio; não derruba o programa.
+
+        ``quiet_hours = [22]`` chegava inteiro até quem desempacota em dois
+        nomes, e aí o erro aparecia num `eve watch status` — longe da causa e
+        parecendo defeito do comando.
+        """
+        if valor is None:
+            return None
+        if len(valor) != 2 or not all(0 <= h <= 23 for h in valor):
+            log.warning("config.quiet_hours_invalido", valor=valor)
+            return None
+        return valor
 
 
 class MCPServerSettings(BaseModel):

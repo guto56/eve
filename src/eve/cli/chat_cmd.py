@@ -114,6 +114,12 @@ def _send(
                         f"({evento['latency_ms']:.0f} ms, {len(evento['tools'])} ferramentas)"
                         f"{marca}[/dim]"
                     )
+                elif kind == "task_plan":
+                    # Uma tarefa leva dezenas de segundos. Sem o plano, o
+                    # terminal fica mudo e parece travado — a interface web
+                    # mostra desde sempre; aqui faltava.
+                    for i, passo in enumerate(evento.get("task", {}).get("plan") or [], 1):
+                        console.print(f"[dim]  {i}. {passo}[/dim]")
                 elif kind == "tool":
                     args = json.dumps(evento["arguments"], ensure_ascii=False)
                     console.print(f"[magenta]→ {evento['name']}[/magenta][dim]{args}[/dim]")

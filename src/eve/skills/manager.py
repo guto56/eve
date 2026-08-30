@@ -7,6 +7,7 @@ de filtrar ferramentas por rota — contexto é caro.
 
 from __future__ import annotations
 
+import re
 import shutil
 from pathlib import Path
 from typing import Any
@@ -74,15 +75,7 @@ class SkillManager:
             return None
         manifesto_path = skill.path / MANIFESTO
         texto = manifesto_path.read_text(encoding="utf-8")
-        linhas = [linha for linha in texto.splitlines() if not linha.startswith("enabled")]
-        # `enabled` fica logo depois do nome, para o arquivo continuar legível.
-        for i, linha in enumerate(linhas):
-            if linha.startswith("name"):
-                linhas.insert(i + 1, f"enabled = {'true' if ligada else 'false'}")
-                break
-        else:  # pragma: no cover - manifesto sem nome não carrega
-            linhas.insert(0, f"enabled = {'true' if ligada else 'false'}")
-        manifesto_path.write_text("\n".join(linhas) + "\n", encoding="utf-8")
+        manifesto_path.write_text(_com_enabled(texto, ligada), encoding="utf-8")
         skill.enabled = ligada
         return skill
 
@@ -162,3 +155,33 @@ class SkillManager:
 
     def describe(self) -> list[dict[str, Any]]:
         return [skill.describe(self.missing_secrets(skill)) for skill in self.skills.values()]
+
+
+TABELA = re.compile(r"^\s*\[")
+CHAVE = re.compile(r"^(name|enabled)\s*=")
+
+
+def _com_enabled(texto: str, ligada: bool) -> str:
+    """Reescreve ``enabled`` no manifesto sem tocar no resto do arquivo.
+
+    Edição de linha em vez de reescrever o TOML porque o manifesto é do
+    usuário: um round-trip apagaria comentários e formatação. Mas só até a
+    primeira tabela — depois dela, uma linha "name =" é de outra coisa
+    (``[[mcp]]``, por exemplo), e "enabled" ali dentro não é este.
+    """
+    linhas = texto.splitlines()
+    fim = next((i for i, linha in enumerate(linhas) if TABELA.match(linha)), len(linhas))
+    cabeca = [linha for linha in linhas[:fim] if not CHAVE.match(linha) or not _e_enabled(linha)]
+
+    valor = f"enabled = {'true' if ligada else 'false'}"
+    posicao = next((i for i, linha in enumerate(cabeca) if _e_name(linha)), -1)
+    cabeca.insert(posicao + 1, valor)
+    return "\n".join(cabeca + linhas[fim:]).rstrip("\n") + "\n"
+
+
+def _e_enabled(linha: str) -> bool:
+    return linha.split("=", 1)[0].strip() == "enabled"
+
+
+def _e_name(linha: str) -> bool:
+    return linha.split("=", 1)[0].strip() == "name"
