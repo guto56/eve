@@ -116,6 +116,36 @@ Cole a chave de OPENROUTER_API_KEY (não aparece na tela):
 `eve key list` mostra os nomes que a EVE conhece, quais já estão gravados e o
 que ainda falta.
 
+## A memória
+
+Fica em `~/EVE/Memória`, em Markdown. É um vault de Obsidian: abra a pasta e
+você vê tudo que a EVE lembra, com o grafo desenhado.
+
+```
+~/EVE/Memória/
+├── Fatos/          o que é verdade sobre você e seus projetos
+├── Diário/         o que aconteceu, com data
+├── Preferências/   como você gosta que as coisas sejam feitas
+├── Rascunhos/      o fio da conversa atual; some sozinho
+├── Pessoas/        quem foi citado
+└── Conversas/      o que foi dito, ligado ao que virou memória
+```
+
+Cada nota é um `.md` com frontmatter, e os `[[colchetes]]` ligam uma à outra.
+Uma conversa aponta para o fato que produziu; o fato aponta para as pessoas
+que cita; a pessoa acumula um histórico que ninguém escreveu.
+
+**O arquivo é a verdade.** O SQLite continua existindo, mas como índice —
+busca textual, vetorial e o grafo — e é reconstruído a partir dos arquivos,
+nunca o contrário. Na prática:
+
+- editar uma nota no Obsidian corrige a memória, com a EVE rodando;
+- apagar o arquivo apaga a memória;
+- escrever um `.md` à mão vira memória, e a EVE só acrescenta o cabeçalho —
+  sem tirar o arquivo do lugar onde você o pôs.
+
+Só não mexa no `uid` do cabeçalho: é por ele que ela reconhece a nota.
+
 ## Onde as coisas ficam
 
 Tudo sob `~/.eve` (ou `$EVE_HOME`):

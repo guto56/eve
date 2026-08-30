@@ -47,6 +47,12 @@ class Memory:
     session: str | None = None
     context: dict[str, Any] = field(default_factory=dict)
 
+    title: str | None = None
+    """Nome da nota no cofre. É por ele que os ``[[colchetes]]`` resolvem.
+
+    Não vai para o banco: no cofre o nome do arquivo é o título, e ter as duas
+    coisas seria ter duas verdades."""
+
     uid: str = field(default_factory=lambda: uuid.uuid4().hex[:16])
     rowid: int | None = None
     created_at: float = field(default_factory=time.time)
@@ -66,6 +72,7 @@ class Memory:
     def as_dict(self) -> dict[str, Any]:
         return {
             "uid": self.uid,
+            "title": self.title,
             "content": self.content,
             "kind": self.kind.value,
             "importance": round(self.importance, 3),

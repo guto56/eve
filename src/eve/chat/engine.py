@@ -39,6 +39,7 @@ from eve.chat.prompts import system_prompt
 from eve.chat.session import ChatSession, SessionStore
 from eve.events import EventType
 from eve.logging import get_logger
+from eve.memory.models import Memory
 from eve.router.router import Router, RoutingDecision
 from eve.router.routes import Route
 from eve.tools.bus import ToolBus
@@ -188,6 +189,28 @@ class ChatEngine:
             return
         if gravadas:
             log.info("memoria.extraidas", count=len(gravadas), session=session.id)
+        await self._registrar(session, gravadas)
+
+    async def _registrar(self, session: ChatSession, gravadas: Sequence[Memory]) -> None:
+        """Anota a conversa no cofre, ligada ao que ela virou.
+
+        A conversa é o rastro; o fato extraído é o que sobra dela. Ligar os
+        dois deixa a pergunta "de onde a EVE tirou isso?" com resposta.
+        """
+        if self.memory.vault is None:
+            return
+        falas = [m.content for m in session.history(limit=6) if m.role == "user" and m.content]
+        if not falas:
+            return
+        titulos = [m.title or m.summary(40) for m in gravadas]
+        try:
+            # Fora do laço: escrever arquivo é I/O de bloqueio, e o laço aqui
+            # está atendendo a conversa de alguém.
+            await asyncio.to_thread(
+                self.memory.vault.registrar_conversa, session.id, falas[-2:], titulos
+            )
+        except OSError as exc:  # pragma: no cover - disco cheio, permissão
+            log.warning("conversa.nao_registrada", error=str(exc))
 
     async def drain(self) -> None:
         """Espera as extrações pendentes. Usado no encerramento e nos testes."""

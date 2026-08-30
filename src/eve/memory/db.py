@@ -6,6 +6,7 @@ nada sai da máquina sem o usuário mandar.
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 from pathlib import Path
 
@@ -13,12 +14,13 @@ from eve.logging import get_logger
 
 log = get_logger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 3
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS memories (
     rowid       INTEGER PRIMARY KEY AUTOINCREMENT,
     uid         TEXT    NOT NULL UNIQUE,
+    title       TEXT,
     content     TEXT    NOT NULL,
     kind        TEXT    NOT NULL,
     importance  REAL    NOT NULL DEFAULT 0.5,
@@ -61,12 +63,20 @@ CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE ON memories BEGIN
     INSERT INTO memories_fts(rowid, content) VALUES (new.rowid, new.content);
 END;
 
+-- As ligações do cofre: cada [[colchete]] escrito numa nota vira uma linha.
+-- `to_uid` é nulo enquanto a nota do outro lado não existe — o Obsidian
+-- desenha esses links pendentes no grafo, e perdê-los seria perder a intenção
+-- de quem escreveu.
 CREATE TABLE IF NOT EXISTS memory_links (
     from_uid  TEXT NOT NULL,
-    to_uid    TEXT NOT NULL,
-    relation  TEXT NOT NULL DEFAULT 'relacionada',
-    PRIMARY KEY (from_uid, to_uid, relation)
+    to_title  TEXT NOT NULL,
+    to_uid    TEXT,
+    relation  TEXT NOT NULL DEFAULT 'menciona',
+    PRIMARY KEY (from_uid, to_title, relation)
 );
+
+CREATE INDEX IF NOT EXISTS idx_links_to ON memory_links(to_uid);
+CREATE INDEX IF NOT EXISTS idx_links_titulo ON memory_links(to_title);
 
 CREATE TABLE IF NOT EXISTS meta (chave TEXT PRIMARY KEY, valor TEXT NOT NULL);
 """
@@ -93,6 +103,7 @@ def connect(path: Path, dimensions: int = 768) -> tuple[sqlite3.Connection, Vect
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA synchronous=NORMAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    _migrar(conn)
     conn.executescript(SCHEMA)
 
     vectors = _load_vectors(conn, dimensions)
@@ -102,6 +113,28 @@ def connect(path: Path, dimensions: int = 768) -> tuple[sqlite3.Connection, Vect
     )
     conn.commit()
     return conn, vectors
+
+
+def _migrar(conn: sqlite3.Connection) -> None:
+    """Ajustes de esquema entre versões.
+
+    A v2 refez ``memory_links`` para guardar o título do alvo, e não só o uid.
+    A tabela antiga nunca chegou a ser escrita, então recriá-la não perde nada
+    — e vale mais que carregar uma migração de dados que não existem.
+    """
+    try:
+        versao = conn.execute("SELECT valor FROM meta WHERE chave = 'schema_version'").fetchone()
+    except sqlite3.OperationalError:
+        return  # banco novo: o esquema já nasce na versão atual
+    atual = int(versao["valor"]) if versao is not None else 0
+    if atual < 2:
+        conn.execute("DROP TABLE IF EXISTS memory_links")
+    if atual < 3:
+        # O título vem do nome do arquivo no cofre; guardá-lo aqui é cache, não
+        # segunda verdade — a reconciliação o reescreve a cada varredura.
+        with contextlib.suppress(sqlite3.OperationalError):
+            conn.execute("ALTER TABLE memories ADD COLUMN title TEXT")
+    conn.commit()
 
 
 def _load_vectors(conn: sqlite3.Connection, dimensions: int) -> VectorSupport:

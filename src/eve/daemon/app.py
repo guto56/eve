@@ -45,6 +45,8 @@ from eve.mcp.manager import MCPManager
 from eve.memory.embeddings import Embedder
 from eve.memory.manager import MemoryManager
 from eve.memory.store import MemoryStore
+from eve.memory.vault import Vault
+from eve.memory.watcher import CofreObserver
 from eve.paths import paths
 from eve.permissions import PermissionEngine
 from eve.proactive.engine import ProactiveEngine
@@ -88,6 +90,16 @@ async def _com_prazo(etapa: str, tarefa: Any, prazo: float = PRAZO_ENCERRAMENTO)
     return None
 
 
+async def _conferir_cofre(app: FastAPI) -> None:
+    """Acerta o índice com os arquivos e passa a acompanhá-los ao vivo."""
+    await app.state.memory.reconciliar()
+    if app.state.memory.sync is None:
+        return
+    observador = CofreObserver(app.state.bus, app.state.memory.sync)
+    app.state.cofre = observador
+    await observador.start()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     bus: EventBus = app.state.bus
@@ -100,6 +112,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 
     await app.state.proactive.start()
     await _start_watchers(app)
+
+    # O cofre pode ter mudado com a EVE desligada — alguém editou no Obsidian,
+    # apagou uma nota, escreveu outra à mão. O índice acerta o passo agora, e
+    # o observador mantém o passo enquanto ela roda.
+    conferencia = asyncio.create_task(_conferir_cofre(app))
 
     await bus.emit(EventType.SYSTEM_STARTED, version=__version__, pid=os.getpid())
     log.info(
@@ -114,7 +131,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.info("core.stopping")
 
         conexoes.cancel()
+        conferencia.cancel()
+        if app.state.cofre is not None:
+            await _com_prazo("cofre.observador", app.state.cofre.stop())
         await _com_prazo("mcp.conexoes", asyncio.gather(conexoes, return_exceptions=True))
+        await _com_prazo("cofre", asyncio.gather(conferencia, return_exceptions=True))
         await _com_prazo("watchers", app.state.watch.aclose())
         await _com_prazo("proatividade", app.state.proactive.stop())
         await _com_prazo("tarefas", app.state.tasks.aclose())
@@ -148,6 +169,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.secrets = build_store(paths().ensure().home / "secrets.json")
     app.state.providers = ProviderManager(settings, app.state.secrets)
     app.state.memory = build_memory(settings, app.state.bus, app.state.providers)
+    app.state.cofre = None
     app.state.browser = BrowserSession()
     app.state.search = _build_search(app.state.secrets)
     app.state.tools = build_tool_bus(
@@ -207,7 +229,8 @@ def build_memory(settings: Settings, bus: EventBus, providers: ProviderManager) 
         model=settings.memory.embedding_model,
         dimensions=settings.memory.embedding_dimensions,
     )
-    return MemoryManager(store, embedder, providers, bus)
+    # O cofre fica na pasta visível: a memória é do usuário, não do programa.
+    return MemoryManager(store, embedder, providers, bus, vault=Vault(p.memoria))
 
 
 def build_tool_bus(

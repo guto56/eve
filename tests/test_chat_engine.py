@@ -218,6 +218,9 @@ async def test_explicit_memory_turn_does_not_trigger_extraction(
     memoria = AsyncMock()
     memoria.context_for = AsyncMock(return_value="")
     memoria.remember = AsyncMock(return_value=(None, "nova"))
+    # O cofre é síncrono de propósito (roda em thread). Um AsyncMock aqui
+    # devolveria corrotina onde o código espera um caminho.
+    memoria.vault = None
     tool_bus.services["memory"] = memoria
     engine.memory = memoria
 
@@ -234,6 +237,8 @@ async def test_so_conversa_gera_memoria(engine: ChatEngine, fake_providers) -> N
 
     memoria = AsyncMock()
     memoria.context_for = AsyncMock(return_value="")
+    # Sem cofre: o registro da conversa é síncrono e não é o que este teste vê.
+    memoria.vault = None
     engine.memory = memoria
 
     fake_providers.fake.queue.extend([reply("WEB"), reply("achei isso")])

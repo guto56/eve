@@ -75,6 +75,11 @@ class Paths:
     # --- pasta visível ------------------------------------------------
 
     @property
+    def memoria(self) -> Path:
+        """O cofre: a memória da EVE em Markdown, aberta no Obsidian."""
+        return self.work / "Memória"
+
+    @property
     def screenshots(self) -> Path:
         return self.work / "Capturas"
 

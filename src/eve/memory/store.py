@@ -36,7 +36,7 @@ ter achado nada. Medido nesta máquina: acerto legítimo ≈ 0,61, consulta sem
 relação ≈ 0,75."""
 
 COLUNAS = (
-    "rowid, uid, content, kind, importance, confidence, source, session, context, "
+    "rowid, uid, title, content, kind, importance, confidence, source, session, context, "
     "created_at, updated_at, last_used_at, use_count, expires_at"
 )
 
@@ -71,11 +71,12 @@ class MemoryStore:
     def _add_sync(self, memory: Memory, embedding: Sequence[float] | None) -> Memory:
         cursor = self._conn.execute(
             """INSERT INTO memories
-               (uid, content, kind, importance, confidence, source, session, context,
+               (uid, title, content, kind, importance, confidence, source, session, context,
                 created_at, updated_at, expires_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?)""",
             (
                 memory.uid,
+                memory.title,
                 memory.content,
                 memory.kind.value,
                 memory.importance,
@@ -98,25 +99,38 @@ class MemoryStore:
             return
         import sqlite_vec
 
+        # Apagar e inserir, e não INSERT OR REPLACE: a tabela virtual do
+        # sqlite-vec não aceita substituição pela chave, e reclama justamente
+        # quando o conteúdo de uma memória muda — que é quando mais importa.
+        self._conn.execute("DELETE FROM memories_vec WHERE rowid = ?", (rowid,))
         self._conn.execute(
-            "INSERT OR REPLACE INTO memories_vec(rowid, embedding) VALUES (?, ?)",
+            "INSERT INTO memories_vec(rowid, embedding) VALUES (?, ?)",
             (rowid, sqlite_vec.serialize_float32(list(embedding))),
         )
 
     async def update_content(
-        self, uid: str, content: str, embedding: Sequence[float] | None = None
+        self,
+        uid: str,
+        content: str,
+        embedding: Sequence[float] | None = None,
+        title: str | None = None,
     ) -> Memory | None:
-        return await self._run(self._update_sync, uid, content, embedding)
+        return await self._run(self._update_sync, uid, content, embedding, title)
 
     def _update_sync(
-        self, uid: str, content: str, embedding: Sequence[float] | None
+        self,
+        uid: str,
+        content: str,
+        embedding: Sequence[float] | None,
+        title: str | None = None,
     ) -> Memory | None:
         linha = self._conn.execute("SELECT rowid FROM memories WHERE uid = ?", (uid,)).fetchone()
         if linha is None:
             return None
         self._conn.execute(
-            "UPDATE memories SET content = ?, updated_at = ? WHERE uid = ?",
-            (content, time.time(), uid),
+            "UPDATE memories SET content = ?, title = COALESCE(?, title), updated_at = ? "
+            "WHERE uid = ?",
+            (content, title, time.time(), uid),
         )
         self._store_vector(linha["rowid"], embedding)
         self._conn.commit()
@@ -153,6 +167,116 @@ class MemoryStore:
         self._conn.execute("DELETE FROM memory_links WHERE from_uid = ? OR to_uid = ?", (uid, uid))
         self._conn.commit()
         return True
+
+    # ---------------------------------------------------------- ligações
+
+    async def set_links(self, uid: str, alvos: Sequence[tuple[str, str | None]]) -> None:
+        """Substitui as ligações que saem desta nota.
+
+        Substituir e não acrescentar: a nota no disco é a verdade, e um link
+        apagado no Obsidian tem de sumir do índice também.
+        """
+        await self._run(self._set_links_sync, uid, list(alvos))
+
+    def _set_links_sync(self, uid: str, alvos: list[tuple[str, str | None]]) -> None:
+        self._conn.execute("DELETE FROM memory_links WHERE from_uid = ?", (uid,))
+        self._conn.executemany(
+            "INSERT OR REPLACE INTO memory_links(from_uid, to_title, to_uid) VALUES (?,?,?)",
+            [(uid, titulo, destino) for titulo, destino in alvos],
+        )
+        self._conn.commit()
+
+    async def links(self, uid: str) -> list[dict[str, Any]]:
+        """Para onde esta nota aponta."""
+        return await self._run(self._links_sync, uid)
+
+    def _links_sync(self, uid: str) -> list[dict[str, Any]]:
+        return [
+            {"titulo": linha["to_title"], "uid": linha["to_uid"]}
+            for linha in self._conn.execute(
+                "SELECT to_title, to_uid FROM memory_links WHERE from_uid = ? ORDER BY to_title",
+                (uid,),
+            )
+        ]
+
+    async def backlinks(self, uid: str) -> list[Memory]:
+        """Quem aponta para esta nota. É o que transforma a lista em rede."""
+        return await self._run(self._backlinks_sync, uid)
+
+    def _backlinks_sync(self, uid: str) -> list[Memory]:
+        linhas = self._conn.execute(
+            """SELECT m.* FROM memories m
+               JOIN memory_links l ON l.from_uid = m.uid
+               WHERE l.to_uid = ?
+               ORDER BY m.updated_at DESC""",
+            (uid,),
+        ).fetchall()
+        return [_to_memory(linha) for linha in linhas]
+
+    async def vizinhas(self, uid: str, limit: int = 5) -> list[Memory]:
+        """Notas a um passo de distância, nos dois sentidos."""
+        return await self._run(self._vizinhas_sync, uid, limit)
+
+    def _vizinhas_sync(self, uid: str, limit: int) -> list[Memory]:
+        linhas = self._conn.execute(
+            """SELECT DISTINCT m.* FROM memories m
+               JOIN memory_links l
+                 ON (l.to_uid = m.uid AND l.from_uid = ?)
+                 OR (l.from_uid = m.uid AND l.to_uid = ?)
+               WHERE m.uid != ?
+               ORDER BY m.importance DESC, m.updated_at DESC
+               LIMIT ?""",
+            (uid, uid, uid, limit),
+        ).fetchall()
+        return [_to_memory(linha) for linha in linhas]
+
+    async def todas(self) -> list[Memory]:
+        """Tudo que está no índice. Usado só na migração para o cofre."""
+        return await self._run(
+            lambda: [
+                _to_memory(linha) for linha in self._conn.execute(f"SELECT {COLUNAS} FROM memories")
+            ]
+        )
+
+    async def meta(self, chave: str) -> str | None:
+        return await self._run(
+            lambda: (
+                linha["valor"]
+                if (
+                    linha := self._conn.execute(
+                        "SELECT valor FROM meta WHERE chave = ?", (chave,)
+                    ).fetchone()
+                )
+                else None
+            )
+        )
+
+    async def set_meta(self, chave: str, valor: str) -> None:
+        def gravar() -> None:
+            self._conn.execute(
+                "INSERT OR REPLACE INTO meta(chave, valor) VALUES (?,?)", (chave, valor)
+            )
+            self._conn.commit()
+
+        await self._run(gravar)
+
+    async def uids(self) -> set[str]:
+        """Tudo que o índice conhece — usado para achar o que sumiu do disco."""
+        return await self._run(
+            lambda: {linha["uid"] for linha in self._conn.execute("SELECT uid FROM memories")}
+        )
+
+    async def expired_uids(self) -> list[str]:
+        """Quem já passou da validade — para apagar arquivo e índice juntos."""
+        return await self._run(
+            lambda: [
+                linha["uid"]
+                for linha in self._conn.execute(
+                    "SELECT uid FROM memories WHERE expires_at IS NOT NULL AND expires_at < ?",
+                    (time.time(),),
+                )
+            ]
+        )
 
     async def forget_expired(self) -> int:
         return await self._run(self._forget_expired_sync)
@@ -386,6 +510,7 @@ def _to_memory(linha: sqlite3.Row, score: float | None = None) -> Memory:
         updated_at=linha["updated_at"],
         expires_at=linha["expires_at"],
     )
+    memoria.title = linha["title"] if "title" in linha.keys() else None
     memoria.rowid = linha["rowid"]
     memoria.last_used_at = linha["last_used_at"]
     memoria.use_count = linha["use_count"]
