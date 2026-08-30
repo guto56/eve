@@ -1,4 +1,4 @@
-import type { Approval, MemoryItem, Status, ToolSpec } from "./types";
+import type { Approval, LogEntry, MemoryItem, Status, ToolSpec } from "./types";
 
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, {
@@ -26,7 +26,14 @@ export const api = {
   searchMemory: (q: string) =>
     json<{ memories: MemoryItem[] }>(`/api/memory/search?q=${encodeURIComponent(q)}`),
   forgetMemory: (uid: string) => json(`/api/memory/${uid}`, { method: "DELETE" }),
+  logs: (source: LogSource, lines = 300, q = "") =>
+    json<{ entries: LogEntry[]; path: string; count: number }>(
+      `/api/logs?source=${source}&lines=${lines}${q ? `&q=${encodeURIComponent(q)}` : ""}`,
+    ),
 };
+
+export const LOG_SOURCES = ["eve", "daemon", "service", "mcp"] as const;
+export type LogSource = (typeof LOG_SOURCES)[number];
 
 export interface ChatFrame {
   type: string;

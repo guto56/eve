@@ -67,3 +67,19 @@ export interface ToolSpec {
   risk: string;
   effective: { risk: string; allowed: boolean; needs_confirmation: boolean };
 }
+
+export interface LiveEvent {
+  id: number;
+  ts: number;
+  type: string;
+  source: string;
+  payload: Record<string, unknown>;
+}
+
+export interface LogEntry {
+  ts: string;
+  level: string;
+  event: string;
+  detail: string;
+  raw: string;
+}

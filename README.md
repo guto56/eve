@@ -108,6 +108,7 @@ Configuração por ambiente: `EVE_SERVER__PORT=9000 eve start`.
 | `GET /api/approvals` · `POST /api/approvals/{id}` | confirmações |
 | `GET /api/permissions` · `POST /api/permissions/reload` | política |
 | `GET /api/audit` | trilha de auditoria |
+| `GET /api/logs` · `/api/logs/sources` | logs do daemon, para a aba de acompanhamento |
 | `GET/PUT/DELETE /api/secrets` | credenciais (nunca devolve valores) |
 | `GET /api/providers` · `POST /api/providers/reset` | provedores de IA |
 | `POST /api/ai/ask` | conversa com um modelo (SSE quando `stream`) |

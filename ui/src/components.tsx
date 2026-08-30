@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "./api";
+import { LogsTab } from "./LogsTab";
 import type { Approval, MemoryItem, Status, ToolRun, ToolSpec, Turn } from "./types";
 
 const RISCO_LABEL: Record<string, string> = {
@@ -138,7 +139,7 @@ function Linha({ k, v }: { k: string; v: React.ReactNode }) {
 }
 
 export function Panel({ status, onClose }: { status: Status | null; onClose: () => void }) {
-  const [aba, setAba] = useState<"sistema" | "memoria" | "ferramentas">("sistema");
+  const [aba, setAba] = useState<"sistema" | "logs" | "memoria" | "ferramentas">("sistema");
   const [memorias, setMemorias] = useState<MemoryItem[]>([]);
   const [ferramentas, setFerramentas] = useState<ToolSpec[]>([]);
 
@@ -150,7 +151,7 @@ export function Panel({ status, onClose }: { status: Status | null; onClose: () 
   return (
     <aside className="panel">
       <div className="head">
-        {(["sistema", "memoria", "ferramentas"] as const).map((nome) => (
+        {(["sistema", "logs", "memoria", "ferramentas"] as const).map((nome) => (
           <button
             key={nome}
             className="ghost"
@@ -164,6 +165,8 @@ export function Panel({ status, onClose }: { status: Status | null; onClose: () 
           fechar
         </button>
       </div>
+
+      {aba === "logs" && <LogsTab ativo />}
 
       {aba === "sistema" && status && (
         <div className="rows">

@@ -29,6 +29,7 @@ from eve.daemon.routes import (
     chat,
     extensions,
     health,
+    logs,
     memory,
     proactive,
     tasks,
@@ -167,6 +168,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(extensions.router)
     app.include_router(tasks.router)
     app.include_router(proactive.router)
+    app.include_router(logs.router)
     # A interface é montada por último: sua rota curinga não pode capturar
     # nada da API.
     web.mount(app)
