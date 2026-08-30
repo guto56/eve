@@ -41,7 +41,7 @@ Restrição dominante do alvo: **Apple M1, 8 GB de RAM**. Nada de modelo local a
 | 10 | Web + navegador | Tavily, Playwright como Tool | **concluída** |
 | 11 | Agentes | tarefas multi-etapa com progresso | **concluída** |
 | 12 | Eventos + proatividade | Event System, observadores, notificações por prioridade | **concluída** |
-| 13 | Instalador | comando único, idempotente, atualizável, reversível | |
+| 13 | Instalador | comando único, idempotente, atualizável, reversível | **concluída** |
 | 14 | Telefonia (futuro) | Twilio/SIP, chamadas por evento | |
 
 ## Regras de execução

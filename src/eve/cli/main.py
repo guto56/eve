@@ -23,6 +23,9 @@ from eve.cli.ai_cmd import ask, key_app, provider_app
 from eve.cli.chat_cmd import chat as chat_cmd
 from eve.cli.ext_cmd import mcp_app, skill_app
 from eve.cli.memory_cmd import memory_app
+from eve.cli.service_cmd import service_app
+from eve.cli.service_cmd import uninstall as uninstall_cmd
+from eve.cli.service_cmd import update as update_cmd
 from eve.cli.task_cmd import task_app
 from eve.cli.tools_cmd import permission_app, tool_app
 from eve.cli.voice_cmd import voice_app
@@ -37,9 +40,21 @@ err_console = Console(stderr=True)
 app = typer.Typer(
     name="eve",
     help="EVE — assistente pessoal de IA local-first para macOS.",
-    no_args_is_help=True,
     add_completion=False,
+    invoke_without_command=True,
 )
+
+
+@app.callback()
+def principal(ctx: typer.Context) -> None:
+    """EVE — assistente pessoal de IA local-first para macOS.
+
+    Sem subcomando, abre a interface (subindo a EVE se preciso).
+    """
+    if ctx.invoked_subcommand is None:
+        web()
+
+
 config_app = typer.Typer(name="config", help="Configuração da EVE.", no_args_is_help=True)
 app.add_typer(config_app)
 app.add_typer(tool_app)
@@ -52,6 +67,9 @@ app.add_typer(skill_app)
 app.add_typer(mcp_app)
 app.add_typer(task_app)
 app.add_typer(watch_app)
+app.add_typer(service_app)
+app.command(name="update")(update_cmd)
+app.command(name="uninstall")(uninstall_cmd)
 app.command(name="ask")(ask)
 app.command(name="chat")(chat_cmd)
 
@@ -77,6 +95,19 @@ def start(
     if process.probe_health(settings) is not None:
         console.print("[yellow]A EVE já está rodando.[/yellow]")
         raise typer.Exit(0)
+
+    # Com o serviço instalado, quem manda no processo é o launchd. Subir um
+    # daemon paralelo daria conflito de porta e dois donos para a mesma EVE.
+    from eve import service as _servico
+
+    if _servico.installed():
+        estado = _servico.start()
+        if process.wait_for_health(settings) is not None:
+            console.print(
+                f"[green]EVE ativa[/green] — pelo serviço, pid {estado.pid}, "
+                f"http://{settings.server.host}:{settings.server.port}"
+            )
+            raise typer.Exit(0)
 
     if foreground:
         import asyncio
@@ -123,9 +154,27 @@ def run(
     start(foreground=True)
 
 
+@app.command(hidden=True)
+def daemon() -> None:
+    """Roda o Core sem enfeite. É o que o serviço de background executa."""
+    from eve.daemon.server import run
+
+    run(load_settings())
+
+
 @app.command()
 def stop() -> None:
     """Para o Core."""
+    from eve import service as _servico
+
+    if _servico.status().loaded:
+        if _servico.stop():
+            console.print("[green]EVE parada.[/green]")
+            console.print("[dim]Volta no próximo login, ou com `eve start`.[/dim]")
+            raise typer.Exit(0)
+        err_console.print("[red]O serviço não parou.[/red] Veja `eve service status`.")
+        raise typer.Exit(1)
+
     pid = process.running_pid()
     if pid is None:
         console.print("[yellow]A EVE não está rodando.[/yellow]")
@@ -141,6 +190,17 @@ def stop() -> None:
 @app.command()
 def restart() -> None:
     """Reinicia o Core."""
+    from eve import service as _servico
+
+    if _servico.status().loaded:
+        estado = _servico.restart()
+        settings = load_settings()
+        if process.wait_for_health(settings) is not None:
+            console.print(f"[green]EVE reiniciada[/green] — pelo serviço, pid {estado.pid}.")
+            raise typer.Exit(0)
+        err_console.print("[red]O serviço não voltou.[/red]")
+        raise typer.Exit(1)
+
     pid = process.running_pid()
     if pid is not None:
         process.terminate(pid)

@@ -20,6 +20,8 @@ def isolated_home(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[P
     monkeypatch.setenv("EVE_WORKSPACE", str(tmp_path / "eve-work"))
     # Nenhum teste toca no Keychain do usuário nem enxerga credencial real.
     monkeypatch.setenv("EVE_SECRETS_BACKEND", "memory")
+    # Nenhum teste mexe no launchd da máquina.
+    monkeypatch.setenv("EVE_SERVICE_DISABLED", "1")
     yield home
 
 

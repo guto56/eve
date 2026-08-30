@@ -2,18 +2,19 @@
 
 Assistente pessoal de IA local-first para macOS.
 
-Estado: **Fase 12 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra, pesquisa na web, controla um navegador, executa tarefas de várias etapas, percebe o que acontece e avisa quando importa, tem interface web e se estende por Skills e MCP. Veja [docs/PLANO.md](docs/PLANO.md).
+Estado: **Fase 13 concluída** — a EVE conversa por texto e por voz, age no Mac, lembra, pesquisa na web, controla um navegador, executa tarefas de várias etapas, percebe o que acontece e avisa quando importa, tem interface web e se estende por Skills e MCP. Veja [docs/PLANO.md](docs/PLANO.md).
 
 ## Instalação
 
-Enquanto o instalador de um comando só não chega (Fase 13):
-
 ```bash
-uv tool install --editable .
+curl -fsSL https://get.eve.ai | bash
 ```
 
-Isso põe `eve` no PATH (`~/.local/bin/eve`), apontando para este diretório —
-mudanças no código valem na hora, sem reinstalar.
+De uma cópia local do projeto, `./install.sh`. O instalador confere o
+computador, instala o que falta, baixa os modelos, cria `~/EVE`, deixa a EVE
+subindo sozinha depois do login e abre a interface. Rodar de novo é seguro:
+ele pula o que já está pronto e nunca toca em memória, credenciais ou
+configuração.
 
 ```bash
 eve run                 # no terminal, com acompanhamento ao vivo
@@ -50,6 +51,7 @@ uv run ruff check src tests
 
 | Comando | O que faz |
 |---|---|
+| `eve` | abre a interface |
 | `eve run` | roda no terminal, mostrando o que ela faz; Ctrl+C encerra |
 | `eve start` | sobe o Core em segundo plano |
 | `eve stop` | encerra o Core |
@@ -75,6 +77,8 @@ uv run ruff check src tests
 | `eve mcp list/add/remove/reconnect/tools` | servidores MCP |
 | `eve task list/show/cancel` | tarefas de agente |
 | `eve watch add/list/remove/status/simulate` | observadores e proatividade |
+| `eve service install/uninstall/status` | subir sozinha depois do login |
+| `eve update` · `eve uninstall` | atualizar e remover, preservando seus dados |
 
 ## Onde as coisas ficam
 

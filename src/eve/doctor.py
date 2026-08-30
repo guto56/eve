@@ -348,6 +348,24 @@ def check_voice(_: Settings) -> Check:
     return Check("Voz", Status.OK, "transcrição e fala configuradas")
 
 
+def check_service(_: Settings) -> Check:
+    """A EVE sobe sozinha depois do login?"""
+    from eve import service
+
+    estado = service.status()
+    if not estado.installed:
+        return Check(
+            "Serviço",
+            Status.WARN,
+            "não instalado — a EVE não sobe sozinha (use `eve service install`)",
+        )
+    if estado.loaded and estado.pid:
+        return Check("Serviço", Status.OK, f"ativo, pid {estado.pid}")
+    if estado.loaded:
+        return Check("Serviço", Status.WARN, f"carregado sem processo: {estado.detail}")
+    return Check("Serviço", Status.WARN, "instalado mas parado — `eve start` sobe")
+
+
 def check_web(_: Settings) -> Check:
     from eve.web import STATIC, is_built
 
@@ -409,6 +427,7 @@ CHECKS: list[CheckFn] = [
     check_proactive,
     check_web_access,
     check_extensions,
+    check_service,
     check_web,
     check_ollama,
 ]
