@@ -522,6 +522,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .log-linha.cat-voice   .log-tipo { color: var(--ok); }
 .log-linha.cat-watch   { border-left-color: var(--text-faint); }
 .log-linha.cat-system  { border-left-color: var(--line); }
+.log-linha.cat-delta   { border-left-color: var(--accent-dim); }
+.log-linha.cat-delta   .log-tipo { color: var(--accent-dim); }
+.chip.cat-delta { color: var(--accent-dim); }
+.log-linha.cat-daemon  { border-left-color: var(--line-soft); }
+.log-linha.cat-daemon  .log-tipo { color: var(--text-faint); }
 
 .chip.cat-tool { color: var(--tool); }
 .chip.cat-chat { color: var(--accent); }

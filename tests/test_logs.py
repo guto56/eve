@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi.testclient import TestClient
 
 from eve.daemon.app import create_app
@@ -67,3 +69,30 @@ def test_websocket_entrega_historico_ao_conectar() -> None:
             primeiro = ws.receive_json()
     assert primeiro["type"] == "event"
     assert primeiro["replay"] is True
+
+
+def test_stream_acompanha_o_arquivo_ao_vivo() -> None:
+    """O barramento tem o que a EVE faz; o arquivo tem o resto — uvicorn,
+    avisos de biblioteca, tudo que nunca vira evento."""
+    p = paths().ensure()
+    p.log_file.write_text("linha antiga\n", encoding="utf-8")
+
+    with TestClient(create_app()) as client:
+        with client.stream("GET", "/api/logs/stream", params={"source": "eve"}) as resposta:
+            assert resposta.status_code == 200
+            assert "text/event-stream" in resposta.headers["content-type"]
+            with p.log_file.open("a", encoding="utf-8") as fh:
+                fh.write("2026-08-30T10:00:00Z [warning  ] algo.novo  x=1\n")
+            for linha in resposta.iter_lines():
+                if linha.startswith("data:"):
+                    entrada = json.loads(linha[5:])
+                    break
+    # Só o que chegou depois de conectar; a linha antiga não é reenviada.
+    assert entrada["event"] == "algo.novo"
+    assert entrada["level"] == "warning"
+
+
+def test_stream_recusa_fonte_desconhecida() -> None:
+    with TestClient(create_app()) as client:
+        resposta = client.get("/api/logs/stream", params={"source": "../etc/passwd"})
+    assert resposta.status_code == 422

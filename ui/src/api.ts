@@ -57,15 +57,19 @@ export class EveSocket {
   private closedByUs = false;
 
   private topics: string;
+  private history: number;
 
-  constructor(topics = "message.*,tool.*,router.*,memory.*,system.*") {
+  constructor(topics = "message.*,tool.*,router.*,memory.*,system.*", history = 0) {
     this.topics = topics;
+    this.history = history;
   }
 
   connect() {
     this.closedByUs = false;
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-    const url = `${protocol}//${location.host}/ws?topics=${encodeURIComponent(this.topics)}&history=0`;
+    const url =
+      `${protocol}//${location.host}/ws` +
+      `?topics=${encodeURIComponent(this.topics)}&history=${this.history}`;
     const socket = new WebSocket(url);
     this.socket = socket;
 

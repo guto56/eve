@@ -7,12 +7,15 @@ ver o que aconteceu antes de a aba ser aberta.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import re
+from collections.abc import AsyncIterator
 from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Query, Request
+from fastapi.responses import StreamingResponse
 
 from eve.paths import paths
 
@@ -51,6 +54,48 @@ async def read_logs(
         "entries": [_analisar(linha) for linha in conteudo[-lines:]],
         "count": len(conteudo),
     }
+
+
+@router.get("/stream")
+async def stream_logs(
+    request: Request,
+    source: str = Query(default="eve", pattern="^(eve|daemon|service|mcp)$"),
+) -> StreamingResponse:
+    """Acompanha o arquivo em tempo real.
+
+    O barramento tem o que a EVE faz; o arquivo tem o resto — uvicorn, avisos
+    de biblioteca, tudo que nunca vira evento. Para a tela mostrar de fato
+    tudo, as duas fontes precisam chegar juntas.
+    """
+    caminho = _caminho(source)
+
+    async def acompanhar() -> AsyncIterator[str]:
+        posicao = caminho.stat().st_size if caminho.exists() else 0
+        while True:
+            if await request.is_disconnected():
+                return
+            try:
+                if caminho.exists():
+                    tamanho = caminho.stat().st_size
+                    # Arquivo rotacionado ou truncado: recomeça do início.
+                    if tamanho < posicao:
+                        posicao = 0
+                    if tamanho > posicao:
+                        with caminho.open("r", encoding="utf-8", errors="replace") as fh:
+                            fh.seek(posicao)
+                            novas = fh.read()
+                            posicao = fh.tell()
+                        for linha in novas.splitlines():
+                            if linha.strip():
+                                dados = json.dumps(
+                                    _analisar(linha), ensure_ascii=False, default=str
+                                )
+                                yield f"data: {dados}\n\n"
+            except OSError:  # pragma: no cover - arquivo sumiu no meio
+                pass
+            await asyncio.sleep(1.0)
+
+    return StreamingResponse(acompanhar(), media_type="text/event-stream")
 
 
 @router.get("/sources")

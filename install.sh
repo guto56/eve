@@ -2,7 +2,7 @@
 #
 # Instalador da EVE.
 #
-#   curl -fsSL https://get.eve.ai | bash
+#   curl -fsSL https://raw.githubusercontent.com/guto56/eve/main/install.sh | bash
 #
 # Ou, de uma cópia local do projeto:
 #
@@ -13,8 +13,10 @@
 #
 set -euo pipefail
 
-REPO="${EVE_REPO:-https://github.com/eve-assistant/eve.git}"
-DESTINO="${EVE_SOURCE:-$HOME/EVE/.eve-src}"
+REPO="${EVE_REPO:-https://github.com/guto56/eve.git}"
+# O código é infraestrutura: vai para a pasta oculta. ~/EVE fica para
+# o que é do usuário.
+DESTINO="${EVE_SOURCE:-$HOME/.eve/src}"
 MODELO="${EVE_MODEL:-qwen3.5:2b}"
 EMBEDDINGS="${EVE_EMBEDDING_MODEL:-embeddinggemma}"
 

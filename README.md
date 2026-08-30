@@ -7,7 +7,7 @@ Estado: **Fase 13 concluída** — a EVE conversa por texto e por voz, age no Ma
 ## Instalação
 
 ```bash
-curl -fsSL https://get.eve.ai | bash
+curl -fsSL https://raw.githubusercontent.com/guto56/eve/main/install.sh | bash
 ```
 
 De uma cópia local do projeto, `./install.sh`. O instalador confere o

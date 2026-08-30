@@ -5,7 +5,7 @@ Concluída em 2026-08-30.
 ## Um comando
 
 ```bash
-curl -fsSL https://get.eve.ai | bash
+curl -fsSL https://raw.githubusercontent.com/guto56/eve/main/install.sh | bash
 ```
 
 Ou, de uma cópia local, `./install.sh`. O script:

@@ -3,7 +3,12 @@ import { api, LOG_SOURCES, type LogSource } from "./api";
 import type { LogEntry } from "./types";
 import { categoria, useLogs } from "./useLogs";
 
-const CATEGORIAS = ["tool", "chat", "memory", "task", "voice", "watch", "system"] as const;
+const CATEGORIAS = [
+  "tool", "chat", "delta", "memory", "task", "voice", "watch", "system", "daemon",
+] as const;
+
+/** Tokens de resposta chegam às centenas; começam escondidos. */
+const OCULTAS_INICIAIS = new Set(["delta"]);
 
 function hora(ts: number): string {
   const d = new Date(ts * 1000);
@@ -28,7 +33,7 @@ export function LogsTab({ ativo }: { ativo: boolean }) {
   const [modo, setModo] = useState<"eventos" | "arquivo">("eventos");
   const [fonte, setFonte] = useState<LogSource>("eve");
   const [busca, setBusca] = useState("");
-  const [ocultas, setOcultas] = useState<Set<string>>(new Set());
+  const [ocultas, setOcultas] = useState<Set<string>>(new Set(OCULTAS_INICIAIS));
   const [arquivo, setArquivo] = useState<LogEntry[]>([]);
   const [aberto, setAberto] = useState<number | null>(null);
   const fim = useRef<HTMLDivElement>(null);

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { EveSocket } from "./api";
-import type { LiveEvent } from "./types";
+import type { LiveEvent, LogEntry } from "./types";
 
 const LIMITE = 600;
 /** Um barramento movimentado enche a tela em segundos; guardamos o recente. */
@@ -27,7 +27,9 @@ export function useLogs(ativo: boolean) {
 
   useEffect(() => {
     if (!ativo) return;
-    const socket = new EveSocket("*");
+    // Abrir a aba e ver tela vazia não informa nada. O barramento guarda um
+    // histórico; pedimos o recente para a aba já nascer com contexto.
+    const socket = new EveSocket("*", 200);
     socketRef.current = socket;
 
     const off = socket.on((frame) => {
@@ -52,6 +54,35 @@ export function useLogs(ativo: boolean) {
     };
   }, [ativo]);
 
+  // O barramento tem o que a EVE faz; o arquivo tem o resto — uvicorn, avisos
+  // de biblioteca, tudo que nunca vira evento. Para a tela mostrar de fato
+  // tudo, as duas fontes chegam juntas.
+  useEffect(() => {
+    if (!ativo) return;
+    const fonte = new EventSource("/api/logs/stream?source=eve");
+    fonte.onmessage = (e) => {
+      if (pausadoRef.current) return;
+      const linha = JSON.parse(e.data) as LogEntry;
+      if (!linha.raw?.trim()) return;
+      setEventos((atual) => {
+        const proximo = [
+          ...atual,
+          {
+            id: ++contador,
+            ts: Date.now() / 1000,
+            type: linha.event || `log.${linha.level}`,
+            source: "daemon",
+            payload: linha.event
+              ? { nivel: linha.level, detalhe: linha.detail }
+              : { linha: linha.detail || linha.raw },
+          } satisfies LiveEvent,
+        ];
+        return proximo.length > LIMITE ? proximo.slice(-LIMITE) : proximo;
+      });
+    };
+    return () => fonte.close();
+  }, [ativo]);
+
   const limpar = useCallback(() => setEventos([]), []);
 
   return { eventos, pausado, setPausado, conectado, limpar };
@@ -59,6 +90,8 @@ export function useLogs(ativo: boolean) {
 
 /** Agrupa por prefixo para colorir e filtrar. */
 export function categoria(tipo: string): string {
+  // Um token por evento afoga o resto; merece filtro próprio.
+  if (tipo === "message.delta") return "delta";
   const raiz = tipo.split(".")[0];
   if (["tool", "mcp"].includes(raiz)) return "tool";
   if (["message", "router", "client"].includes(raiz)) return "chat";
@@ -66,5 +99,6 @@ export function categoria(tipo: string): string {
   if (["task", "proactive"].includes(raiz)) return "task";
   if (["voice"].includes(raiz)) return "voice";
   if (["file", "git", "app", "user"].includes(raiz)) return "watch";
+  if (raiz === "log") return "daemon";
   return "system";
 }
