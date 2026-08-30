@@ -57,7 +57,17 @@ MAX_TOOL_ROUNDS = 5
 #: este corte, "compare o preço destes fones" virava oito memórias inventadas
 #: sobre as preferências do usuário — e uma delas depois contaminou a resposta
 #: de uma pergunta sem relação nenhuma.
-COM_EXTRACAO = frozenset({Route.CHAT})
+#:
+#: MEMORY entra junto porque é onde o usuário fala de si. Deixá-la de fora
+#: custava caro: "meu irmão é dentista em Contagem" ia para MEMORY, o modelo
+#: escolhia `memory.recall`, não achava nada — e a frase se perdia, porque a
+#: extração também não rodava naquela rota.
+COM_EXTRACAO = frozenset({Route.CHAT, Route.MEMORY})
+
+#: Ferramentas que já gravaram nesta vez. Extrair depois delas reescreveria a
+#: mesma coisa com outras palavras: perto demais para ser útil, longe demais
+#: para o deduplicador juntar.
+JA_GRAVOU = frozenset({"memory.remember"})
 
 
 @dataclass
@@ -128,15 +138,19 @@ class ChatEngine:
         )
         yield ChatEvent("routed", decision.as_dict())
 
+        usadas: set[str] = set()
         try:
             if decision.is_fast_path:
                 async for event in self._fast_path(session, decision, source):
+                    _anotar(usadas, event)
                     yield event
             elif decision.route is Route.TASK and self.agent is not None:
                 async for event in self._agent_path(session, decision, text, source):
+                    _anotar(usadas, event)
                     yield event
             else:
                 async for event in self._model_path(session, decision, text, source):
+                    _anotar(usadas, event)
                     yield event
         except ProviderError as exc:
             yield await self._fail(session, source, str(exc), exc.kind)
@@ -146,7 +160,7 @@ class ChatEngine:
             yield await self._fail(session, source, str(exc), type(exc).__name__)
             return
 
-        self._schedule_extraction(session, decision)
+        self._schedule_extraction(session, decision, usadas)
 
         elapsed = (time.perf_counter() - started) * 1000
         await self.bus.emit(
@@ -169,13 +183,20 @@ class ChatEngine:
             log.warning("chat.memoria_indisponivel", error=str(exc))
             return ""
 
-    def _schedule_extraction(self, session: ChatSession, decision: RoutingDecision) -> None:
-        """Extrai memórias em segundo plano: não pode atrasar a resposta."""
+    def _schedule_extraction(
+        self, session: ChatSession, decision: RoutingDecision, usadas: set[str]
+    ) -> None:
+        """Extrai memórias em segundo plano: não pode atrasar a resposta.
+
+        O critério é o que aconteceu, não a rota: se alguma ferramenta já
+        gravou, não há o que extrair; se nada gravou, a frase do usuário ainda
+        pode conter um fato que vale guardar.
+        """
         if self.memory is None or not self.tools.settings.memory.auto_extract:
             return
         if len(session.messages) < 2:
             return
-        if decision.route not in COM_EXTRACAO:
+        if decision.route not in COM_EXTRACAO or usadas & JA_GRAVOU:
             return
         tarefa = asyncio.create_task(self._extract(session))
         self._extracoes.add(tarefa)
@@ -430,6 +451,14 @@ async def _drain(fila: asyncio.Queue[dict[str, Any] | None]) -> AsyncIterator[di
         if evento is None:
             return
         yield evento
+
+
+def _anotar(usadas: set[str], evento: ChatEvent) -> None:
+    """Anota que ferramenta rodou nesta vez, para a extração saber o que já foi feito."""
+    if evento.kind == "tool":
+        nome = evento.data.get("name")
+        if isinstance(nome, str):
+            usadas.add(nome)
 
 
 def _result_event(call: ToolCall, result: ToolResult) -> dict[str, Any]:

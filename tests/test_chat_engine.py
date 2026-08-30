@@ -265,3 +265,45 @@ async def test_chamada_invalida_repetida_e_recusada(
     eventos = await collect(engine, "faça algo que vai dar errado sempre")
     tentativas = [e for e in eventos if e.kind == "tool"]
     assert len(tentativas) == 2  # tentou duas vezes; depois nem chamou
+
+
+async def test_contar_um_fato_nao_vira_busca(engine: ChatEngine) -> None:
+    """Regressão: "meu irmão é dentista" ia para MEMORY, o modelo escolhia
+    `memory.recall`, não achava nada e respondia "não tenho essa informação" —
+    para uma frase que o usuário acabara de dizer."""
+    from eve.router.routes import Route
+    from eve.router.rules import apply_rules
+
+    achado = apply_rules("meu irmão se chama Bruno e ele é dentista em Contagem")
+    assert achado is not None
+    assert achado.route is Route.CHAT
+
+    # Pergunta continua sendo pergunta, mesmo com "meu" na frente.
+    assert apply_rules("meu irmão trabalha onde") is None
+    assert apply_rules("onde meu irmão trabalha") is None
+
+
+async def test_extracao_segue_o_que_aconteceu_e_nao_a_rota(engine: ChatEngine) -> None:
+    """Se nada gravou, ainda pode haver fato a guardar; se algo gravou, não."""
+    from unittest.mock import AsyncMock
+
+    from eve.ai.base import assistant, user
+    from eve.router.router import RoutingDecision
+    from eve.router.routes import Route
+
+    memoria = AsyncMock()
+    memoria.vault = None
+    engine.memory = memoria
+    decisao = RoutingDecision(route=Route.MEMORY, decided_by="rule", reason="teste")
+    engine.sessions.get_or_create("s").add(user("meu irmão é dentista"))
+    sessao = engine.sessions.get_or_create("s")
+    sessao.add(assistant("Entendi."))
+
+    engine._schedule_extraction(sessao, decisao, set())
+    await engine.drain()
+    memoria.extract.assert_awaited()
+
+    memoria.extract.reset_mock()
+    engine._schedule_extraction(sessao, decisao, {"memory.remember"})
+    await engine.drain()
+    memoria.extract.assert_not_awaited()

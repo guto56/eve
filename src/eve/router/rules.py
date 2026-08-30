@@ -342,6 +342,23 @@ RULES: tuple[Rule, ...] = (
         veto=re.compile(f"({MULTI_STEP.pattern})|({PEDE_ABERTURA.pattern})"),
     ),
     rule(
+        "conta_sobre_si",
+        # "meu irmão se chama Bruno", "minha mãe mora em Nova Lima", "eu moro em BH"
+        r"^(meu|minha|meus|minhas)\s+\S+.*\b(e|eh|sao|se chama|chama|mora|trabalha"
+        r"|nasceu|faz|tem|gosta|prefere|estuda|usa)\b"
+        r"|^eu\s+(moro|trabalho|estudo|nasci|gosto|prefiro|uso|tenho|sou|faco)\b",
+        Route.CHAT,
+        # O texto chega normalizado, sem "?": quem diz que é pergunta é a
+        # palavra. No começo ("onde meu irmão...") ou no fim, que é como se
+        # pergunta em português falado ("meu irmão trabalha onde"). No meio
+        # não vale: "trabalho como designer" é afirmação.
+        veto=re.compile(
+            r"^(onde|qual|quais|quando|quem|quanto|quantos|como|por que|porque)\b"
+            r"|\b(onde|qual|quando|quem|quanto|quantos)\s*$"
+            f"|({MULTI_STEP.pattern})|({PEDE_ABERTURA.pattern})"
+        ),
+    ),
+    rule(
         "memoria_gravar",
         r"^(lembre|lembra|memorize|anote|guarde|nao esqueca)\s+(que\s+|de\s+)?(?P<texto>.+)$",
         Route.MEMORY,
