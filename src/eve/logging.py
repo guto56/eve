@@ -16,15 +16,21 @@ def configure_logging(
     json_format: bool = False,
     log_file: Path | None = None,
     force: bool = False,
+    console: bool = True,
 ) -> None:
-    """Configura structlog + logging padrão. Idempotente salvo ``force``."""
+    """Configura structlog + logging padrão. Idempotente salvo ``force``.
+
+    Com ``console=False`` nada vai para a tela: é o modo de primeiro plano,
+    onde quem informa o usuário é o acompanhamento de eventos, não o log
+    interno. O arquivo continua recebendo tudo.
+    """
     global _configured
     if _configured and not force:
         return
 
     numeric = getattr(logging, level.upper(), logging.INFO)
 
-    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)]
+    handlers: list[logging.Handler] = [logging.StreamHandler(sys.stderr)] if console else []
     if log_file is not None:
         log_file.parent.mkdir(parents=True, exist_ok=True)
         handlers.append(logging.FileHandler(log_file, encoding="utf-8"))

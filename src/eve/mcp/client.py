@@ -69,6 +69,7 @@ class MCPConnection:
         self._task: asyncio.Task[None] | None = None
         self._ready = asyncio.Event()
         self._stop = asyncio.Event()
+        self._errlog: Any = None
 
     @property
     def connected(self) -> bool:
@@ -124,6 +125,9 @@ class MCPConnection:
         finally:
             self._session = None
             self._ready.set()
+            if self._errlog is not None:
+                self._errlog.close()
+                self._errlog = None
 
     def _streams(self) -> Any:
         config = self.config
@@ -139,13 +143,20 @@ class MCPConnection:
 
         if not shutil.which(config.command):
             raise FileNotFoundError(f"comando não encontrado: {config.command}")
+        # O servidor externo escreve na saída de erro; sem desviar, ele
+        # aparece no meio do acompanhamento no terminal.
+        from eve.paths import paths
+
+        destino = (paths().ensure().logs / "mcp.log").open("a", encoding="utf-8")
+        self._errlog = destino
         return stdio_client(
             StdioServerParameters(
                 command=config.command,
                 args=list(config.args),
                 env=dict(config.env) or None,
                 cwd=config.cwd,
-            )
+            ),
+            errlog=destino,
         )
 
     async def call(self, tool: str, arguments: dict[str, Any]) -> Any:

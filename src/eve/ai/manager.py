@@ -118,7 +118,13 @@ class ProviderManager:
         self._external = None
         self._external_failed = None
 
-    async def aclose(self) -> None:
+    async def aclose(self, free_memory: bool = True) -> None:
+        """Fecha os provedores. Por padrão, devolve a RAM do modelo local."""
+        if free_memory and self._local is not None:
+            descarregar = getattr(self._local, "unload", None)
+            if descarregar is not None:
+                for modelo in {self.settings.ai.local_model, self.settings.ai.local_fast_model}:
+                    await descarregar(modelo)
         for provider in (self._local, self._external):
             if provider is not None:
                 await provider.aclose()

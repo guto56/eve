@@ -16,7 +16,8 @@ Isso põe `eve` no PATH (`~/.local/bin/eve`), apontando para este diretório —
 mudanças no código valem na hora, sem reinstalar.
 
 ```bash
-eve start && eve web
+eve run                 # no terminal, com acompanhamento ao vivo
+eve start && eve web    # em segundo plano
 ```
 
 Sem instalar, tudo funciona com `uv run eve ...` de dentro do projeto.
@@ -49,7 +50,8 @@ uv run ruff check src tests
 
 | Comando | O que faz |
 |---|---|
-| `eve start [-f]` | sobe o Core em background (ou no terminal com `-f`) |
+| `eve run` | roda no terminal, mostrando o que ela faz; Ctrl+C encerra |
+| `eve start` | sobe o Core em segundo plano |
 | `eve stop` | encerra o Core |
 | `eve restart` | reinicia o Core |
 | `eve status [--json]` | estado do sistema e dos componentes |

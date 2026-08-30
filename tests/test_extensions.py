@@ -203,3 +203,13 @@ async def test_servidor_inexistente_falha_sem_derrubar() -> None:
     assert conexao.error
     assert len(manager.registry) == 0
     await manager.aclose()
+
+
+def test_instrucoes_nao_viram_regra_de_permissao(tmp_path: Path) -> None:
+    """Regressão: no TOML tudo depois de `[permissions]` pertence à tabela.
+    A chave `instructions` virava uma permissão chamada "instructions"."""
+    diretorio = escrever_skill(tmp_path, "github", manifesto("github"))
+    skill = load_skill(diretorio)
+    assert set(skill.permissions) == {"github.*"}
+    assert "instructions" not in skill.permissions
+    assert skill.instructions

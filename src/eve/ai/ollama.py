@@ -51,6 +51,23 @@ class OllamaProvider(Provider):
             transport=transport,
         )
 
+    async def unload(self, model: str | None = None) -> bool:
+        """Tira o modelo da memória.
+
+        Numa máquina de 8 GB, o modelo local ocupa quase um terço da RAM.
+        Deixá-lo carregado depois que a EVE parou é cobrar do usuário por um
+        serviço que ele desligou. O Ollama recarrega sozinho na próxima vez.
+        """
+        try:
+            await self._client.post(
+                "/api/chat",
+                json={"model": model or self.default_model, "messages": [], "keep_alive": 0},
+                timeout=10.0,
+            )
+        except httpx.HTTPError:
+            return False
+        return True
+
     async def aclose(self) -> None:
         await self._client.aclose()
 

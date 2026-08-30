@@ -14,6 +14,10 @@ version = "0.1.0"
 description = "Repositórios, issues, pull requests e código no GitHub"
 keywords = ["github", "repositório", "repositorio", "issue", "pull request", "commit", "branch"]
 requires_secrets = ["GITHUB_TOKEN"]
+instructions = '''
+Ao trabalhar com GitHub, confirme o repositório antes de agir se o usuário não
+disser qual. Nunca faça push nem abra pull request sem pedido explícito.
+'''
 
 [[mcp]]
 name = "github"
@@ -23,11 +27,6 @@ env = { GITHUB_PERSONAL_ACCESS_TOKEN = "@GITHUB_TOKEN" }
 
 [permissions]
 "github.*" = "confirm"
-
-instructions = '''
-Ao trabalhar com GitHub, confirme o repositório antes de agir se o usuário não
-disser qual. Nunca faça push nem abra pull request sem pedido explícito.
-'''
 """,
     "filesystem": """
 name = "filesystem"

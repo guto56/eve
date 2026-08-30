@@ -79,9 +79,14 @@ def start(
         raise typer.Exit(0)
 
     if foreground:
-        from eve.daemon.server import run
+        import asyncio
 
-        run(settings)
+        from eve.cli.run import serve
+
+        try:
+            asyncio.run(serve(settings, verbose=settings.log.level == "debug"))
+        except KeyboardInterrupt:  # pragma: no cover - Ctrl+C antes do uvicorn assumir
+            console.print("\n[dim]EVE encerrada.[/dim]")
         return
 
     pid = process.spawn_daemon(settings)
@@ -97,6 +102,25 @@ def start(
         f"[green]EVE ativa[/green] — pid {pid}, "
         f"http://{settings.server.host}:{settings.server.port}"
     )
+
+
+@app.command()
+def run(
+    verbose: Annotated[
+        bool, typer.Option("--verbose", "-v", help="Inclui os logs internos.")
+    ] = False,
+) -> None:
+    """Roda a EVE no terminal, mostrando o que ela faz. Ctrl+C encerra."""
+    settings = load_settings()
+    if verbose:
+        settings.log.level = "debug"
+    if process.probe_health(settings) is not None:
+        err_console.print(
+            "[yellow]Já existe uma EVE rodando em segundo plano.[/yellow] "
+            "Use [bold]eve stop[/bold] antes."
+        )
+        raise typer.Exit(1)
+    start(foreground=True)
 
 
 @app.command()
