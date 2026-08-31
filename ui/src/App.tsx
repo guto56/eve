@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { ApprovalCard, Empty, Panel, TurnView } from "./components";
+import { LivePage } from "./LivePage";
 import { useEve } from "./useEve";
 
 export default function App() {
@@ -8,6 +9,7 @@ export default function App() {
   const [rascunho, setRascunho] = useState("");
   const [detalhes, setDetalhes] = useState(false);
   const [painel, setPainel] = useState(false);
+  const [aoVivo, setAoVivo] = useState(false);
   const fim = useRef<HTMLDivElement>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
 
@@ -28,6 +30,8 @@ export default function App() {
     send(conteudo);
     setRascunho("");
   };
+
+  if (aoVivo) return <LivePage onVoltar={() => setAoVivo(false)} />;
 
   return (
     <div className="app">
@@ -51,6 +55,9 @@ export default function App() {
         </div>
         <button className="ghost" onClick={() => setDetalhes((v) => !v)}>
           {detalhes ? "menos" : "detalhes"}
+        </button>
+        <button className="ghost" onClick={() => setAoVivo(true)}>
+          ao vivo
         </button>
         <button className="ghost" onClick={() => setPainel(true)}>
           painel

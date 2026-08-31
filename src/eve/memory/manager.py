@@ -200,6 +200,36 @@ class MemoryManager:
         linhas = "\n".join(f'- O usuário disse: "{m.content}"' for m in memorias)
         return f"Do que você lembra de conversas anteriores:\n{linhas}"
 
+    async def editar(self, uid: str, conteudo: str) -> Memory | None:
+        """Corrige uma memória que já existe, no arquivo e no índice.
+
+        Distinto de gravar outra: quando o fato mudou — mudou de cidade, trocou
+        de emprego — guardar a versão nova ao lado da velha deixa as duas na
+        memória, e a busca passa a devolver as duas como se ambas valessem.
+        """
+        conteudo = conteudo.strip()
+        if not conteudo:
+            raise ValueError("memória vazia")
+        atual = await self.store.get(uid)
+        if atual is None:
+            return None
+
+        atual.content = conteudo
+        if self.vault is not None:
+            self.vault.escrever(atual)
+        embedding = await self.embedder.embed_one(conteudo)
+        atualizada = await self.store.update_content(uid, conteudo, embedding, atual.title)
+        if atualizada is not None and self.bus is not None:
+            await self.bus.emit(
+                EventType.MEMORY_WRITTEN,
+                source="memory",
+                uid=uid,
+                kind=atual.kind.value,
+                content=atual.summary(),
+                editada=True,
+            )
+        return atualizada
+
     async def forget(self, uid: str) -> bool:
         """Esquecer é apagar o arquivo. O índice só acompanha."""
         if self.vault is not None:

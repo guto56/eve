@@ -1,0 +1,104 @@
+"""A conversa ao vivo com o Gemini Live.
+
+Não dá para testar contra o Google sem chave, mas a parte que quebra em
+silêncio é nossa: traduzir o protocolo, podar o schema e responder toda
+chamada de ferramenta. É isso que está aqui.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+
+from fastapi.testclient import TestClient
+
+from eve.daemon.app import create_app
+from eve.daemon.routes.live import _declaracoes, _podar
+from eve.voice.live import TAXA_ENTRADA, TAXA_SAIDA, SessaoLive, _traduzir
+
+
+def test_sem_chave_a_pagina_diz_o_que_falta() -> None:
+    """Erro sem instrução é erro que o usuário não resolve."""
+    with TestClient(create_app()) as client, client.websocket_connect("/ws/live") as ws:
+        aviso = ws.receive_json()
+    assert aviso["fatal"] is True
+    assert "GOOGLE_API_KEY" in aviso["error"]
+    assert "eve key set" in aviso["hint"]
+
+
+def test_abertura_pede_o_que_a_conversa_precisa() -> None:
+    sessao = SessaoLive(
+        "chave",
+        model="gemini-3.1-flash-live-preview",
+        voice="Aoede",
+        instrucoes="Você é a EVE.",
+        ferramentas=[{"name": "memory__recall", "description": "x", "parameters": {}}],
+    )
+    setup = sessao._abertura()["setup"]
+
+    assert setup["model"].startswith("models/")
+    assert setup["generationConfig"]["responseModalities"] == ["AUDIO"]
+    voz = setup["generationConfig"]["speechConfig"]["voiceConfig"]["prebuiltVoiceConfig"]
+    assert voz["voiceName"] == "Aoede"
+    # Sem transcrição o áudio passa e some: não sobra nada na tela.
+    assert "inputAudioTranscription" in setup
+    assert "outputAudioTranscription" in setup
+    assert setup["tools"][0]["functionDeclarations"][0]["name"] == "memory__recall"
+
+
+def test_traduz_o_que_o_gemini_manda() -> None:
+    assert _traduzir(json.dumps({"setupComplete": {}})) == [{"tipo": "pronta"}]
+
+    pcm = base64.b64encode(b"\x01\x02").decode()
+    eventos = _traduzir(
+        json.dumps(
+            {
+                "serverContent": {
+                    "inputTranscription": {"text": "oi"},
+                    "outputTranscription": {"text": "olá"},
+                    "modelTurn": {
+                        "parts": [{"inlineData": {"mimeType": "audio/pcm;rate=24000", "data": pcm}}]
+                    },
+                    "turnComplete": True,
+                }
+            }
+        )
+    )
+    assert [e["tipo"] for e in eventos] == ["ouvi", "falei", "audio", "turno_completo"]
+    assert eventos[2]["pcm"] == b"\x01\x02"
+
+    chamada = _traduzir(
+        json.dumps({"toolCall": {"functionCalls": [{"id": "a", "name": "memory__recall"}]}})
+    )
+    assert chamada[0]["chamadas"][0] == {"id": "a", "nome": "memory__recall", "args": {}}
+
+    # Lixo não pode derrubar a conversa.
+    assert _traduzir("não é json") == []
+    assert _traduzir(json.dumps({"desconhecido": 1})) == []
+
+
+def test_schema_podado_para_o_gemini() -> None:
+    """O Gemini recusa a sessão inteira ao ver chave que não conhece, e o erro
+    volta como uma desconexão sem explicação."""
+    sujo = {
+        "type": "object",
+        "title": "RecallParams",
+        "additionalProperties": False,
+        "properties": {"query": {"type": "string", "title": "Query"}},
+        "$defs": {"X": {}},
+    }
+    limpo = _podar(sujo)
+    assert limpo == {"type": "object", "properties": {"query": {"type": "string"}}}
+
+
+def test_a_conversa_alcanca_a_memoria_inteira() -> None:
+    """Ver, criar, corrigir e apagar — foi o que se pediu da página."""
+    app = create_app()
+    nomes = {d["name"] for d in _declaracoes(app.state.tools.registry)}
+    assert {"memory__recall", "memory__list", "memory__remember", "memory__edit"} <= nomes
+    for declaracao in _declaracoes(app.state.tools.registry):
+        assert "additionalProperties" not in json.dumps(declaracao["parameters"])
+
+
+def test_taxas_sao_as_que_o_live_exige() -> None:
+    assert (TAXA_ENTRADA, TAXA_SAIDA) == (16000, 24000)

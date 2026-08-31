@@ -24,6 +24,7 @@ console = Console()
 PERGUNTADAS: tuple[tuple[str, str], ...] = (
     ("OPENROUTER_API_KEY", "modelos grandes — Gemini, Claude, GPT · openrouter.ai/keys"),
     ("TAVILY_API_KEY", "pesquisa na web · app.tavily.com"),
+    ("GOOGLE_API_KEY", "conversa por voz ao vivo · aistudio.google.com/apikey"),
     ("DEEPGRAM_API_KEY", "ouvir você falar · console.deepgram.com"),
     ("CARTESIA_API_KEY", "falar com você · play.cartesia.ai"),
     ("CARTESIA_VOICE_ID", "qual voz usar (o id que aparece no Cartesia)"),

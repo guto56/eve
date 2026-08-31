@@ -94,6 +94,19 @@ class VoiceSettings(BaseModel):
     tts_language: str = "pt"
     output_sample_rate: int = Field(default=24000, gt=0)
 
+    live_model: str = "gemini-3.1-flash-live-preview"
+    """Modelo da conversa ao vivo: um só, que ouve e fala, sem STT nem TTS no meio.
+
+    O par Deepgram+Cartesia continua sendo o caminho padrão da voz; este é o da
+    página de conversa, onde o que importa é a resposta vir rápido."""
+
+    live_voice: str = "Aoede"
+    """Voz do Gemini Live. Outras: Puck, Charon, Kore, Fenrir."""
+
+    live_input_rate: int = 16000
+    live_output_rate: int = 24000
+    """Taxas exigidas pelo Live API: 16 kHz na entrada, 24 kHz na saída."""
+
     barge_in: bool = True
     """Interromper a fala da EVE quando o usuário começa a falar."""
 

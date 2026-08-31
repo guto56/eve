@@ -22,7 +22,7 @@ export type VoiceEvent =
   | { kind: "closed" };
 
 // O worklet roda na thread de áudio: só converte float32 em int16 e entrega.
-const PROCESSOR = `
+export const PROCESSOR = `
 class Captura extends AudioWorkletProcessor {
   process(inputs) {
     const canal = inputs[0]?.[0];

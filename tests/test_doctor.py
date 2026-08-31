@@ -81,7 +81,7 @@ def test_tools_check_counts_builtin_tools(settings: Settings) -> None:
 
     result = check_tools(settings)
     assert result.status is Status.OK
-    assert "41 nativa" in result.detail
+    assert "42 nativa" in result.detail
 
 
 def test_tools_check_warns_about_blocked_tools(settings: Settings) -> None:

@@ -29,6 +29,7 @@ from eve.daemon.routes import (
     chat,
     extensions,
     health,
+    live,
     logs,
     memory,
     proactive,
@@ -211,6 +212,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(chat.router)
     app.include_router(memory.router)
     app.include_router(voice.router)
+    app.include_router(live.router)
     app.include_router(extensions.router)
     app.include_router(tasks.router)
     app.include_router(proactive.router)

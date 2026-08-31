@@ -38,6 +38,11 @@ class ForgetParams(ToolParams):
     query: str = Field(description="O que esquecer.", min_length=2, max_length=500)
 
 
+class EditParams(ToolParams):
+    uid: str = Field(description="Identificador da memória, como aparece em memory.recall.")
+    content: str = Field(min_length=1, description="O texto corrigido, inteiro.")
+
+
 class ListParams(ToolParams):
     limit: int = Field(default=10, ge=1, le=50)
     kind: str | None = Field(default=None, description="Filtrar por camada.")
@@ -80,6 +85,23 @@ def register_memory_tools(registry: ToolRegistry) -> ToolRegistry:
             ],
             "count": len(memorias),
         }
+
+    @tool_decorator(
+        "memory.edit",
+        description=(
+            "Corrige uma memória existente pelo uid. Use quando o fato mudou — "
+            "guardar a versão nova ao lado da velha deixaria as duas valendo."
+        ),
+        params=EditParams,
+        risk=RiskLevel.CONFIRM,
+        registry=registry,
+        keywords=("corrigir", "corrija", "editar", "edite", "atualizar", "mudou", "errado"),
+    )
+    async def editar_memoria(params: EditParams, ctx: ToolContext) -> dict[str, Any]:
+        memoria = await ctx.service("memory").editar(params.uid, params.content)
+        if memoria is None:
+            raise FileNotFoundError(f"não existe memória com uid {params.uid}")
+        return {"uid": memoria.uid, "content": memoria.content}
 
     @tool_decorator(
         "memory.forget",

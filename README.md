@@ -25,6 +25,25 @@ eve start && eve web    # em segundo plano (`eve stop` encerra)
 eve setup               # refazer as escolhas quando quiser
 ```
 
+## Conversa ao vivo
+
+Uma página à parte, no botão **ao vivo**: um modelo só ouve e responde, sem
+transcrever no meio. É o Gemini Live (`gemini-3.1-flash-live-preview`), com o
+áudio indo e voltando pelo mesmo WebSocket.
+
+As ferramentas não vão para o Google executar — ele pede, e quem executa é o
+Tool Bus daqui, com permissão e auditoria. É por isso que uma conversa falada
+pode **ver, criar, corrigir e apagar** memória sem virar um caminho paralelo
+sem regra.
+
+Precisa de uma chave do Google AI Studio, que é separada do OpenRouter:
+
+```bash
+eve key set GOOGLE_API_KEY     # aistudio.google.com/apikey
+```
+
+Sem ela a página abre, explica o que falta e não pede o microfone.
+
 ## Onde a EVE pensa
 
 | Modo | O que roda aqui | O que isso custa |

@@ -30,6 +30,7 @@ KNOWN_SECRETS: dict[str, str] = {
     "CARTESIA_API_KEY": "síntese de voz",
     "CARTESIA_VOICE_ID": "voz escolhida no Cartesia",
     "TAVILY_API_KEY": "pesquisa na web",
+    "GOOGLE_API_KEY": "conversa por voz em tempo real (Gemini Live)",
     "GITHUB_TOKEN": "integração com o GitHub",
     "TWILIO_ACCOUNT_SID": "telefonia (futuro)",
     "TWILIO_AUTH_TOKEN": "telefonia (futuro)",
