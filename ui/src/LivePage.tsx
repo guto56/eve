@@ -1,35 +1,27 @@
 /**
  * A página de conversa ao vivo.
  *
- * Quem está falando não lê a tela: ela existe para dar sinal de que está
- * funcionando — que o microfone está aberto, que a EVE ouviu, que ela mexeu
- * na memória — e para deixar um rastro escrito depois.
+ * Só a esfera e um botão. Quem está falando não lê a tela, e a esfera já diz
+ * em que pé está a conversa pelo próprio movimento — pôr texto ao lado seria
+ * dizer duas vezes a mesma coisa, uma delas do jeito errado.
+ *
+ * O que sobrou de texto é o que não dá para mostrar de outro jeito: quando
+ * alguma coisa falha, e o que fazer a respeito.
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Esfera, type Estado } from "./Esfera";
 import { LiveClient, type LiveEvent, type Motor } from "./live";
 
-type Fala = { de: "voce" | "eve"; texto: string };
-type Acao = { nome: string; ok: boolean | null; erro: string | null };
-
 export function LivePage({ motor = "auto" }: { motor?: Motor }) {
   const [ligada, setLigada] = useState(false);
   const [abrindo, setAbrindo] = useState(false);
-  const [falas, setFalas] = useState<Fala[]>([]);
-  const [acoes, setAcoes] = useState<Acao[]>([]);
-  const [erro, setErro] = useState<{ texto: string; dica?: string } | null>(null);
-  const [info, setInfo] = useState<{ engine: string; model: string; voice: string } | null>(null);
   const [ouvindo, setOuvindo] = useState(false);
   const [falando, setFalando] = useState(false);
-  // Deepgram manda a frase inteira a cada parcial; o Gemini manda pedaços.
-  // Quem emenda e quem substitui depende disso.
-  const incremental = useRef(true);
-  const [rascunho, setRascunho] = useState("");
   const [pensando, setPensando] = useState(false);
   const [nivel, setNivel] = useState(0);
+  const [erro, setErro] = useState<{ texto: string; dica?: string } | null>(null);
   const cliente = useRef<LiveClient | null>(null);
-  const fim = useRef<HTMLDivElement>(null);
 
   const estado: Estado = !ligada
     ? "desligada"
@@ -40,6 +32,43 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
         : ouvindo
           ? "ouvindo"
           : "parada";
+
+  const receber = useCallback((e: LiveEvent) => {
+    switch (e.kind) {
+      case "ready":
+        setLigada(true);
+        setAbrindo(false);
+        break;
+      case "listening":
+        setOuvindo(e.on);
+        break;
+      case "speaking":
+        setFalando(e.on);
+        break;
+      // Ela parou de falar e a resposta ainda não veio: é aqui que a esfera
+      // se fecha e acelera.
+      case "final":
+        setPensando(true);
+        break;
+      case "reply":
+      case "turn":
+        setPensando(false);
+        break;
+      case "error":
+        setErro({ texto: e.error, dica: e.hint });
+        if (e.fatal) {
+          setLigada(false);
+          setAbrindo(false);
+        }
+        break;
+      case "closed":
+        setLigada(false);
+        setAbrindo(false);
+        setOuvindo(false);
+        setFalando(false);
+        break;
+    }
+  }, []);
 
   // O nível vem do áudio, não de um temporizador: quando ela fala, a esfera
   // pulsa com a voz dela; quando você fala, com a sua.
@@ -57,69 +86,15 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
     return () => cancelAnimationFrame(id);
   }, [ligada, falando]);
 
-  useEffect(() => {
-    fim.current?.scrollIntoView({ behavior: "smooth", block: "end" });
-  }, [falas, acoes]);
-
-  const receber = useCallback((e: LiveEvent) => {
-    switch (e.kind) {
-      case "ready":
-        setInfo({ engine: e.engine ?? "gemini", model: e.model, voice: e.voice });
-        incremental.current = e.incremental !== false;
-        setLigada(true);
-        setAbrindo(false);
-        break;
-      case "listening":
-        setOuvindo(e.on);
-        break;
-      case "speaking":
-        setFalando(e.on);
-        break;
-      case "final":
-        setFalas((f) => trocar(f, "voce", e.text));
-        setPensando(true);
-        break;
-      // A transcrição chega em pedaços: emenda no que já está lá, em vez de
-      // empilhar uma linha por sílaba.
-      case "partial":
-        setFalas((f) =>
-          incremental.current ? emendar(f, "voce", e.text) : trocar(f, "voce", e.text),
-        );
-        break;
-      case "reply":
-        setPensando(false);
-        setFalas((f) => emendar(f, "eve", e.text));
-        break;
-      case "tool":
-        setAcoes((a) => [...a, { nome: e.name, ok: null, erro: null }]);
-        break;
-      case "tool_result":
-        setAcoes((a) =>
-          a.map((x, i) => (i === a.length - 1 ? { ...x, ok: e.ok, erro: e.error } : x)),
-        );
-        break;
-      case "turn":
-        setPensando(false);
-        break;
-      case "error":
-        setErro({ texto: e.error, dica: e.hint });
-        if (e.fatal) {
-          setLigada(false);
-          setAbrindo(false);
-        }
-        break;
-      case "closed":
-        setLigada(false);
-        setAbrindo(false);
-        break;
-    }
-  }, []);
+  useEffect(() => () => void cliente.current?.stop(), []);
 
   const alternar = async () => {
     if (cliente.current?.active) {
       await cliente.current.stop();
       cliente.current = null;
       setLigada(false);
+      setOuvindo(false);
+      setFalando(false);
       return;
     }
     setErro(null);
@@ -129,132 +104,34 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
     try {
       await c.start();
     } catch (exc) {
-      setErro({ texto: exc instanceof Error ? exc.message : "não consegui abrir o microfone" });
+      setErro({ texto: exc instanceof Error ? exc.message : "não consegui abrir a conversa" });
       setAbrindo(false);
       cliente.current = null;
     }
   };
 
-  useEffect(() => () => void cliente.current?.stop(), []);
-
-  const enviar = () => {
-    const texto = rascunho.trim();
-    if (!texto || !ligada) return;
-    cliente.current?.enviarTexto(texto);
-    setFalas((f) => [...f, { de: "voce", texto }]);
-    setPensando(true);
-    setRascunho("");
-  };
-
   return (
-    <>
-      <header className="topbar">
-        <div className="brand">
-          <span className={`pulse ${ligada ? "live" : "off"}`} />
-          ao vivo
-        </div>
-        <div className="topbar-meta">
-          {info && (
-            <span>
-              {info.engine} · {info.model} · voz {info.voice}
-            </span>
-          )}
-          {ligada && <span>{falando ? "falando" : ouvindo ? "ouvindo" : "pronta"}</span>}
-        </div>
-      </header>
+    <main className="palco">
+      <Esfera estado={estado} nivel={nivel} />
 
-      <main className="stream palco">
-        <div className="orbe">
-          <Esfera estado={estado} nivel={nivel} />
-          <div className="legenda">
-            {!ligada
-              ? "toque para começar"
-              : falando
-                ? "falando"
-                : pensando
-                  ? "pensando"
-                  : ouvindo
-                    ? "ouvindo"
-                    : "pode falar"}
-          </div>
-        </div>
-        {falas.length === 0 && !ligada && (
-          <div className="empty">
-            <h1>Conversa ao vivo</h1>
-            <p>
-              {info?.engine === "gemini"
-                ? "Um modelo só ouve e responde, sem transcrever no meio."
-                : "Deepgram ouve, o modelo pensa, Cartesia fala."}{" "}
-              Ela enxerga sua memória e pode criar, corrigir e apagar o que você pedir.
-            </p>
-            <p className="dim">Aperte o microfone e fale. Pode interromper a EVE no meio.</p>
-          </div>
-        )}
-        {falas.map((f, i) => (
-          <div key={i} className={`turn ${f.de === "voce" ? "user" : ""}`}>
-            <div className="bubble">{f.texto}</div>
-          </div>
-        ))}
-        {acoes.map((a, i) => (
-          <div key={`a${i}`} className="toolchip">
-            <span className={a.ok === false ? "erro" : ""}>
-              {a.nome}
-              {a.ok === null ? " …" : a.ok ? " ✓" : ` — ${a.erro ?? "falhou"}`}
-            </span>
-          </div>
-        ))}
-        <div ref={fim} />
-      </main>
+      <button
+        className={`interruptor ${ligada ? "on" : ""}`}
+        onClick={alternar}
+        disabled={abrindo}
+        aria-label={ligada ? "Encerrar a conversa" : "Começar a falar"}
+      >
+        <span className="marca" />
+        <span className="dizeres">
+          {abrindo ? "abrindo" : ligada ? "encerrar" : "falar com a EVE"}
+        </span>
+      </button>
 
-      <div className="composer">
-        {erro && (
-          <div className="voice-error">
-            {erro.texto}
-            {erro.dica && <div className="dim">{erro.dica}</div>}
-          </div>
-        )}
-        <div className="field">
-          <button
-            className={`mic ${ligada ? "on" : ""}`}
-            onClick={alternar}
-            disabled={abrindo}
-            title={ligada ? "Encerrar" : "Começar a falar"}
-          >
-            {abrindo ? "…" : ligada ? "■" : "●"}
-          </button>
-          <textarea
-            rows={1}
-            value={rascunho}
-            placeholder={ligada ? "fale, ou escreva aqui" : "aperte o microfone para começar"}
-            onChange={(e) => setRascunho(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                enviar();
-              }
-            }}
-          />
-          <button className="send" disabled={!ligada || !rascunho.trim()} onClick={enviar}>
-            ↑
-          </button>
+      {erro && (
+        <div className="voice-error">
+          {erro.texto}
+          {erro.dica && <div className="dim">{erro.dica}</div>}
         </div>
-      </div>
-    </>
+      )}
+    </main>
   );
-}
-
-/** Substitui a última fala de quem está falando — o transcritor manda a frase inteira. */
-function trocar(falas: Fala[], de: Fala["de"], texto: string): Fala[] {
-  const ultima = falas[falas.length - 1];
-  if (ultima && ultima.de === de) return [...falas.slice(0, -1), { de, texto }];
-  return [...falas, { de, texto }];
-}
-
-/** Junta o pedaço novo à última fala de quem está falando. */
-function emendar(falas: Fala[], de: Fala["de"], texto: string): Fala[] {
-  const ultima = falas[falas.length - 1];
-  if (ultima && ultima.de === de) {
-    return [...falas.slice(0, -1), { de, texto: `${ultima.texto}${texto}` }];
-  }
-  return [...falas, { de, texto }];
 }

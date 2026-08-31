@@ -81,8 +81,9 @@ export class LiveClient {
     // O microfone só é pedido depois que o servidor aceitou: sem chave, a
     // página não tem por que acender a luz do microfone do usuário.
     //
-    // E negá-lo não encerra a sessão: dá para conversar escrevendo, e derrubar
-    // tudo porque o microfone falhou seria tirar o que ainda funcionava.
+    // Sem microfone não há conversa ao vivo: a página é só voz. Encerra a
+    // sessão e diz o que fazer, em vez de deixar a esfera acesa esperando uma
+    // fala que nunca vai chegar.
     try {
       this.stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
@@ -90,8 +91,11 @@ export class LiveClient {
     } catch {
       this.onEvent({
         kind: "error",
-        error: "sem acesso ao microfone — dá para conversar escrevendo",
+        fatal: true,
+        error: "sem acesso ao microfone",
+        hint: "autorize o microfone para este site e tente de novo",
       });
+      await this.stop();
       return;
     }
 

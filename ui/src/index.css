@@ -677,73 +677,88 @@ button { font: inherit; color: inherit; cursor: pointer; }
 }
 
 /* -------------------------------------------------------------- a esfera */
-/* A página ao vivo é preta mesmo no tema claro: a esfera é feita de pontos
-   brancos, e num fundo claro ela simplesmente não existe. */
+/* A página ao vivo é a esfera e um botão. Preta mesmo no tema claro: a esfera
+   é feita de pontos brancos, e num fundo claro ela não existe. */
 .palco {
-  position: relative;
-  align-items: center;
-  justify-content: center;
-  background: #000;
-  overflow: hidden;
-}
-.orbe {
-  position: relative;
+  position: fixed;
+  inset: 0;
+  right: 68px;                 /* o menu continua alcançável */
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 18px;
-  padding: 12px 0 4px;
+  justify-content: center;
+  gap: 34px;
+  background: #000;
+  overflow: hidden;
 }
 .esfera {
-  width: min(56vh, 74vw, 460px);
-  height: min(56vh, 74vw, 460px);
+  width: min(62vh, 82vw, 560px);
+  height: min(62vh, 82vw, 560px);
   display: block;
 }
 /* O halo acompanha o estado: some quando ela está parada, respira quando
-   ouve, e acende quando fala. */
-.esfera.ouvindo { filter: drop-shadow(0 0 26px rgba(190, 225, 255, .28)); }
-.esfera.pensando { filter: drop-shadow(0 0 18px rgba(150, 190, 255, .22)); }
-.esfera.falando { filter: drop-shadow(0 0 40px rgba(215, 235, 255, .42)); }
-.esfera.desligada { opacity: .75; }
-.orbe .legenda {
-  font-size: 11.5px;
-  letter-spacing: .16em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, .42);
-  transition: color .3s;
-}
-.palco .empty h1,
-.palco .empty p { color: rgba(255, 255, 255, .68); }
-.palco .empty p.dim { color: rgba(255, 255, 255, .38); }
-.palco .turn .bubble {
-  background: rgba(255, 255, 255, .06);
-  color: rgba(255, 255, 255, .9);
-  border-color: rgba(255, 255, 255, .1);
-}
-.palco .toolchip { color: rgba(255, 255, 255, .5); }
+   ouve, acende quando fala. */
+.esfera.ouvindo { filter: drop-shadow(0 0 28px rgba(190, 225, 255, .3)); }
+.esfera.pensando { filter: drop-shadow(0 0 20px rgba(150, 190, 255, .24)); }
+.esfera.falando { filter: drop-shadow(0 0 44px rgba(215, 235, 255, .45)); }
+.esfera.desligada { opacity: .72; }
 
-/* A página ao vivo é preta inteira, não só o palco: a esfera é branca sobre
-   preto, e uma barra clara em volta quebraria o efeito. */
+.interruptor {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 11px 22px 11px 16px;
+  border: 1px solid rgba(255, 255, 255, .16);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .04);
+  color: rgba(255, 255, 255, .72);
+  font-size: 12.5px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: border-color .2s, color .2s, background .2s;
+}
+.interruptor:hover:not(:disabled) {
+  border-color: rgba(255, 255, 255, .34);
+  color: #fff;
+}
+.interruptor:disabled { opacity: .5; cursor: default; }
+.interruptor .marca {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .45);
+  transition: background .2s, box-shadow .2s;
+}
+/* Ligada, a marca vira quadrado — o mesmo símbolo de parar de sempre. */
+.interruptor.on .marca {
+  border-radius: 2px;
+  background: #7fd7c4;
+  box-shadow: 0 0 12px rgba(127, 215, 196, .6);
+}
+.interruptor.on { border-color: rgba(127, 215, 196, .4); color: #fff; }
+
+.palco .voice-error {
+  position: absolute;
+  bottom: 26px;
+  max-width: 80%;
+  text-align: center;
+  color: #e88;
+  font-size: 12.5px;
+}
+.palco .voice-error .dim { color: rgba(255, 255, 255, .4); margin-top: 4px; }
+
+/* A página ao vivo é preta inteira: uma barra clara em volta quebraria o
+   efeito da esfera branca sobre preto. */
 .app.noite { background: #000; }
-.app.noite .topbar {
-  background: #000;
-  border-bottom-color: rgba(255, 255, 255, .07);
-}
-.app.noite .topbar .brand,
-.app.noite .topbar-meta { color: rgba(255, 255, 255, .55); }
-.app.noite .composer {
-  background: linear-gradient(to top, #000 55%, transparent);
-}
-.app.noite .field {
-  background: rgba(255, 255, 255, .05);
-  border-color: rgba(255, 255, 255, .1);
-}
-.app.noite .field textarea { color: rgba(255, 255, 255, .9); }
-.app.noite .field textarea::placeholder { color: rgba(255, 255, 255, .32); }
 .app.noite .menu {
   background: #000;
   border-left-color: rgba(255, 255, 255, .07);
 }
 .app.noite .menu .item { color: rgba(255, 255, 255, .38); }
-.app.noite .menu .item.ativo { color: #fff; }
-.app.noite .palco { background: transparent; }
+.app.noite .menu .item:hover { color: rgba(255, 255, 255, .7); background: rgba(255,255,255,.04); }
+.app.noite .menu .item.ativo { color: #fff; border-color: rgba(127, 215, 196, .45); }
+
+@media (max-width: 560px) {
+  .palco { right: 46px; gap: 26px; }
+}
