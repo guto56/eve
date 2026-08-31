@@ -129,9 +129,15 @@ else
   aviso "sem terminal para perguntar — rode 'eve setup' depois"
 fi
 
-MODO="$(eve config show --json 2>/dev/null \
-  | /usr/bin/python3 -c 'import sys,json; print(json.load(sys.stdin)["ai"]["mode"])' \
-  2>/dev/null || echo "hybrid")"
+ler_config() {
+  eve config show --json 2>/dev/null \
+    | /usr/bin/python3 -c "import sys,json;d=json.load(sys.stdin)
+for p in '$1'.split('.'): d = d[p]
+print(d)" 2>/dev/null || echo "$2"
+}
+
+MODO="$(ler_config ai.mode hybrid)"
+TELEFONE="$(ler_config phone.enabled False)"
 
 # ---------------------------------------------------------------- modelos
 
@@ -169,6 +175,15 @@ if [ "$MODO" = "external" ]; then
 else
   passo "Preparando a IA local"
   preparar_ia_local
+fi
+
+# ------------------------------------------------------------- telefone
+
+# O cloudflared só entra se você escolheu telefone: é o que abre o endereço
+# público, e instalar um túnel em quem não vai usar é peso sem motivo.
+if [ "$TELEFONE" = "True" ]; then
+  passo "Preparando o telefone"
+  instalar_brew cloudflared cloudflared
 fi
 
 # ------------------------------------------------------------- navegador
@@ -227,6 +242,12 @@ if [ -n "$FALTANDO" ]; then
   done
   printf "    %so nome fica como está — a chave você digita depois, oculta%s\n" "$DIM" "$FIM"
   printf "    %seve key list%s     mostra o que já está no Keychain\n" "$CIANO" "$FIM"
+fi
+
+if [ "$TELEFONE" = "True" ]; then
+  printf "\n  %sPara o telefone tocar:%s\n" "$BOLD" "$FIM"
+  printf "    %seve phone tunnel%s   abre o endereço e aponta seu número\n" "$CIANO" "$FIM"
+  printf "    %seve phone status%s   o que ainda falta\n" "$CIANO" "$FIM"
 fi
 
 printf "\n  %sPara começar:%s\n" "$BOLD" "$FIM"

@@ -160,6 +160,16 @@ class PhoneSettings(BaseModel):
     host muda no caminho, e conferir a assinatura contra o endereço local
     reprovaria toda chamada legítima. Vazio deduz pelos cabeçalhos."""
 
+    number_sid: str = ""
+    """O número do Twilio que a EVE atende, para reapontar sozinha.
+
+    Guardado porque o endereço do túnel muda a cada vez que ele sobe: sem o
+    identificador do número, seria preciso colar a URL nova no painel do
+    Twilio a cada reinício."""
+
+    number: str = ""
+    """O número em si, só para mostrar na tela."""
+
     greeting: str = "Oi, aqui é a EVE. Pode falar."
     sample_rate: int = 8000
     """A linha telefônica é 8 kHz μ-law. Não é escolha, é o que a rede entrega."""

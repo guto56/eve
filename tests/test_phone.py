@@ -140,3 +140,119 @@ def test_o_app_do_telefone_nao_expoe_a_api(telefone) -> None:
             assert cliente.get(caminho).status_code == 404, caminho
         # E chamar ferramenta, que é o que faria estrago.
         assert cliente.post("/api/tools/file.trash/call", json={"args": {}}).status_code == 404
+
+
+# ------------------------------------------------------- apontar sozinho
+
+
+class _FakeTwilio:
+    """A API do Twilio, o suficiente para os testes."""
+
+    def __init__(self, porta: int) -> None:
+        self.porta = porta
+        self.recebido: dict = {}
+
+    def servir(self):
+        import json
+        import threading
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from urllib.parse import parse_qs
+
+        fake = self
+
+        class H(BaseHTTPRequestHandler):
+            def log_message(self, *a: object) -> None: ...
+
+            def do_GET(self) -> None:
+                self._json(
+                    {
+                        "incoming_phone_numbers": [
+                            {
+                                "sid": "PN1",
+                                "phone_number": "+5531988887777",
+                                "friendly_name": "EVE",
+                                "voice_url": "https://antigo/twilio/voice",
+                            }
+                        ]
+                    }
+                )
+
+            def do_POST(self) -> None:
+                tamanho = int(self.headers.get("Content-Length", 0))
+                fake.recebido = {
+                    k: v[0] for k, v in parse_qs(self.rfile.read(tamanho).decode()).items()
+                }
+                fake.recebido["caminho"] = self.path
+                self._json({"sid": "PN1"})
+
+            def _json(self, corpo: dict) -> None:
+                bruto = json.dumps(corpo).encode()
+                self.send_response(200)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(bruto)))
+                self.end_headers()
+                self.wfile.write(bruto)
+
+        servidor = HTTPServer(("127.0.0.1", self.porta), H)
+        threading.Thread(target=servidor.serve_forever, daemon=True).start()
+        return servidor
+
+
+def test_o_tunel_aponta_o_numero_sozinho(free_port: int, monkeypatch) -> None:
+    """O endereço do túnel muda toda vez que ele sobe.
+
+    Sem apontar por conta própria, seria preciso colar a URL nova no painel do
+    Twilio a cada reinício — que é o contrário de plug and play.
+    """
+    import eve.phone.twilio as mod
+    from eve.phone.twilio import Twilio
+
+    fake = _FakeTwilio(free_port)
+    servidor = fake.servir()
+    monkeypatch.setattr(mod, "BASE", f"http://127.0.0.1:{free_port}/2010-04-01")
+    try:
+        cliente = Twilio("AC123", "token")
+        numeros = cliente.numeros()
+        assert [n.numero for n in numeros] == ["+5531988887777"]
+
+        cliente.apontar(numeros[0].sid, "https://novo.trycloudflare.com/twilio/voice")
+        assert fake.recebido["VoiceUrl"] == "https://novo.trycloudflare.com/twilio/voice"
+        # POST, senão o Twilio manda GET e o formulário não chega.
+        assert fake.recebido["VoiceMethod"] == "POST"
+        assert fake.recebido["caminho"].endswith("/IncomingPhoneNumbers/PN1.json")
+    finally:
+        servidor.shutdown()
+
+
+def test_erro_do_twilio_vira_frase_que_se_entende(free_port: int, monkeypatch) -> None:
+    from eve.phone.twilio import Twilio, TwilioError
+
+    with pytest.raises(TwilioError, match="não configurados"):
+        Twilio("", "")
+
+    import eve.phone.twilio as mod
+
+    monkeypatch.setattr(mod, "BASE", "http://127.0.0.1:1/2010-04-01")
+    with pytest.raises(TwilioError, match="não consegui falar com o Twilio"):
+        Twilio("AC123", "token").numeros()
+
+
+def test_allow_liga_a_telefonia_e_guarda_o_numero(isolated_home) -> None:
+    """`eve phone allow` é o caminho curto para quem já sabe o que quer."""
+    from typer.testing import CliRunner
+
+    from eve.cli.main import app as cli
+    from eve.config import load_settings
+
+    runner_cli = CliRunner()
+    assert runner_cli.invoke(cli, ["phone", "allow", "+5531999998888"]).exit_code == 0
+
+    s = load_settings()
+    assert s.phone.enabled is True
+    assert s.phone.allowed_callers == ["+5531999998888"]
+
+    # Sem o "+" não passa: o Twilio só fala E.164.
+    assert runner_cli.invoke(cli, ["phone", "allow", "31999998888"]).exit_code == 1
+
+    assert runner_cli.invoke(cli, ["phone", "deny", "+5531999998888"]).exit_code == 0
+    assert load_settings().phone.allowed_callers == []

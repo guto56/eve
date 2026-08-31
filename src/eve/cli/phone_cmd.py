@@ -91,9 +91,53 @@ def estado() -> None:
         f"{len(s.phone.allowed_callers)} número(s) autorizado(s)",
         ", ".join(s.phone.allowed_callers),
     )
+    linha(
+        bool(s.phone.number_sid),
+        f"número da EVE: {s.phone.number}" if s.phone.number else "número escolhido",
+        "" if s.phone.number_sid else "eve phone number",
+    )
     linha(bool(s.phone.public_url), "endereço público", s.phone.public_url or "eve phone tunnel")
     linha(bool(shutil.which("cloudflared")), "cloudflared", "brew install cloudflared")
     console.print()
+
+
+@phone_app.command("number")
+def escolher_numero() -> None:
+    """Escolhe qual número do Twilio a EVE atende."""
+    from eve.cli import ask
+    from eve.cli.ask import Opcao
+    from eve.paths import paths
+    from eve.phone.twilio import Twilio, TwilioError
+    from eve.secrets import build_store
+
+    segredos = build_store(paths().ensure().home / "secrets.json")
+    try:
+        numeros = Twilio(
+            segredos.get("TWILIO_ACCOUNT_SID") or "", segredos.get("TWILIO_AUTH_TOKEN") or ""
+        ).numeros()
+    except TwilioError as exc:
+        err_console.print(f"[red]{exc}[/red]")
+        raise typer.Exit(1) from None
+
+    if not numeros:
+        err_console.print("[yellow]Nenhum número nesta conta.[/yellow]")
+        err_console.print("[dim]compre um em console.twilio.com ▸ Phone Numbers[/dim]")
+        raise typer.Exit(1)
+
+    escolhido = numeros[0]
+    if len(numeros) > 1 and ask.interativo():
+        opcoes = [Opcao(str(n)) for n in numeros]
+        escolhido = numeros[ask.escolher("Qual número a EVE atende?", "", opcoes)]
+
+    def mudar(dados: dict) -> None:
+        telefone = dados.setdefault("phone", {})
+        telefone["number_sid"] = escolhido.sid
+        telefone["number"] = escolhido.numero
+        telefone["enabled"] = True
+
+    update_config_file(mudar)
+    console.print(f"[green]A EVE atende em {escolhido}.[/green]")
+    console.print("[dim]agora abra o túnel:[/dim] [cyan]eve phone tunnel[/cyan]")
 
 
 @phone_app.command("tunnel")
@@ -144,18 +188,42 @@ async def _rodar_tunel(porta: int, guardar: bool) -> None:
 
 
 def _mostrar(endereco: str, guardar: bool) -> None:
+    webhook = f"{endereco}/twilio/voice"
     if guardar:
         update_config_file(lambda d: d.setdefault("phone", {}).update({"public_url": endereco}))
 
     console.print()
-    console.print("  [bold green]O telefone pode tocar.[/bold green]")
-    console.print("\n  [bold]Cole no painel do Twilio[/bold]")
-    console.print("  [dim]número ▸ Voice ▸ A call comes in[/dim]")
-    console.print(f"    [cyan]{endereco}/twilio/voice[/cyan]  [dim]HTTP POST[/dim]")
-    console.print("\n  [dim]Enquanto este comando estiver aberto, o endereço vale.[/dim]")
+    console.print("  [bold green]O telefone pode tocar.[/bold green]\n")
+    if not _apontar_sozinho(webhook):
+        console.print("  [bold]Cole no painel do Twilio[/bold]")
+        console.print("  [dim]número ▸ Voice ▸ A call comes in[/dim]")
+        console.print(f"    [cyan]{webhook}[/cyan]  [dim]HTTP POST[/dim]\n")
+    console.print("  [dim]Enquanto este comando estiver aberto, o endereço vale.[/dim]")
     console.print("  [dim]Ctrl+C fecha o túnel e o telefone para de tocar.[/dim]\n")
-    if guardar:
-        console.print(
-            "  [dim]Endereço gravado. Rode[/dim] [cyan]eve restart[/cyan] "
-            "[dim]numa outra janela.[/dim]\n"
-        )
+
+
+def _apontar_sozinho(webhook: str) -> bool:
+    """Aponta o número do Twilio para cá. ``False`` se não deu.
+
+    É o que separa "plug and play" de "cole esta URL de novo": o endereço do
+    túnel muda toda vez que ele sobe, e ninguém quer abrir o painel do Twilio
+    a cada reinício.
+    """
+    from eve.paths import paths
+    from eve.phone.twilio import Twilio, TwilioError
+    from eve.secrets import build_store
+
+    s = load_settings()
+    if not s.phone.number_sid:
+        return False
+    segredos = build_store(paths().ensure().home / "secrets.json")
+    try:
+        Twilio(
+            segredos.get("TWILIO_ACCOUNT_SID") or "", segredos.get("TWILIO_AUTH_TOKEN") or ""
+        ).apontar(s.phone.number_sid, webhook)
+    except TwilioError as exc:
+        console.print(f"  [yellow]não consegui apontar o número:[/yellow] {exc}")
+        return False
+    console.print(f"  [green]✓[/green] {s.phone.number or 'seu número'} já aponta para cá")
+    console.print(f"    [dim]{webhook}[/dim]\n")
+    return True

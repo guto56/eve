@@ -7,6 +7,8 @@ baixar dois gigabytes de modelo.
 
 from __future__ import annotations
 
+from typing import Any
+
 import typer
 from rich.console import Console
 
@@ -29,6 +31,13 @@ PERGUNTADAS: tuple[tuple[str, str], ...] = (
     ("CARTESIA_API_KEY", "falar com você · play.cartesia.ai"),
     ("CARTESIA_VOICE_ID", "qual voz usar (o id que aparece no Cartesia)"),
     ("GITHUB_TOKEN", "issues e repositórios · github.com/settings/tokens"),
+)
+
+#: Só perguntadas quando o usuário diz que quer telefone. Pedir SID e token de
+#: telefonia a quem não vai usar é fazer a pessoa pular duas perguntas.
+DO_TELEFONE: tuple[tuple[str, str], ...] = (
+    ("TWILIO_ACCOUNT_SID", "começa com AC · console.twilio.com"),
+    ("TWILIO_AUTH_TOKEN", "no mesmo lugar, logo abaixo do SID"),
 )
 
 MODOS = (
@@ -90,6 +99,9 @@ def setup(
             store.set(nome, valor)
             gravadas.append(nome)
 
+        if not somente_chaves:
+            _telefone(store)
+
         autostart = False
         if not somente_chaves:
             _permissoes()
@@ -116,6 +128,81 @@ def setup(
             console.print("  [green]✓[/green] vai subir sozinha depois do login")
         else:
             console.print("  [yellow]![/yellow] não consegui instalar o serviço")
+
+
+def _telefone(store: Any) -> None:
+    """Deixa a EVE atender o telefone, se o usuário quiser.
+
+    Fica atrás de uma pergunta porque é a única parte que expõe algo na
+    internet: quem não vai ligar para ela não tem por que abrir essa porta.
+    """
+    console.print()
+    if not ask.sim_ou_nao(
+        "Quer poder ligar para a EVE e conversar por telefone?",
+        "Precisa de uma conta no Twilio com um número. Dá para fazer depois com `eve phone`.",
+        padrao=False,
+    ):
+        return
+
+    for nome, para_que in DO_TELEFONE:
+        valor = ask.segredo(nome, para_que, _mascara(store.get(nome)))
+        if valor:
+            store.set(nome, valor)
+
+    console.print("\n  [bold]De qual telefone você vai ligar?[/bold]")
+    console.print("  [dim]só ele vai poder falar com a EVE — deixe em branco para depois[/dim]")
+    meu = ask.segredo("seu número", "com país e DDD: +5531999998888", None)
+    if meu and not meu.startswith("+"):
+        console.print(
+            "  [yellow]precisa do formato internacional; ajuste depois com "
+            "`eve phone allow`[/yellow]"
+        )
+        meu = None
+
+    def mudar(dados: dict[str, Any]) -> None:
+        telefone = dados.setdefault("phone", {})
+        telefone["enabled"] = True
+        if meu:
+            telefone["allowed_callers"] = sorted({*(telefone.get("allowed_callers") or []), meu})
+
+    update_config_file(mudar)
+    _escolher_numero_do_twilio(store)
+
+
+def _escolher_numero_do_twilio(store: Any) -> None:
+    """Descobre os números da conta e guarda o escolhido.
+
+    Guardar qual número é o que permite o túnel reapontá-lo sozinho depois —
+    sem isso, seria preciso colar a URL nova no painel a cada reinício.
+    """
+    from eve.phone.twilio import Twilio, TwilioError
+
+    try:
+        numeros = Twilio(
+            store.get("TWILIO_ACCOUNT_SID") or "", store.get("TWILIO_AUTH_TOKEN") or ""
+        ).numeros()
+    except TwilioError as exc:
+        console.print(f"  [yellow]não consegui ver seus números:[/yellow] {exc}")
+        console.print("  [dim]depois, com as chaves certas:[/dim] [cyan]eve phone number[/cyan]")
+        return
+
+    if not numeros:
+        console.print("  [yellow]nenhum número nesta conta do Twilio.[/yellow]")
+        console.print("  [dim]compre um e rode:[/dim] [cyan]eve phone number[/cyan]")
+        return
+
+    escolhido = numeros[0]
+    if len(numeros) > 1:
+        opcoes = [Opcao(str(n)) for n in numeros]
+        escolhido = numeros[ask.escolher("Qual número a EVE atende?", "", opcoes)]
+
+    def mudar(dados: dict[str, Any]) -> None:
+        telefone = dados.setdefault("phone", {})
+        telefone["number_sid"] = escolhido.sid
+        telefone["number"] = escolhido.numero
+
+    update_config_file(mudar)
+    console.print(f"  [green]✓[/green] a EVE atende em {escolhido}")
 
 
 def _permissoes() -> None:
@@ -187,6 +274,14 @@ def _resumo(
     desligados = [nome for nome, _ in PERGUNTADAS if nome not in gravadas and nome not in mantidas]
     for nome in desligados:
         console.print(f"  [dim]·[/dim] {nome} [dim]em branco — {KNOWN_SECRETS[nome]}[/dim]")
+
+    from eve.config import load_settings
+
+    telefone = load_settings().phone
+    if telefone.enabled and not somente_chaves:
+        onde = telefone.number or "número a escolher"
+        console.print(f"  [green]✓[/green] telefone [dim]{onde}[/dim]")
+        console.print("    [dim]para o telefone tocar:[/dim] [cyan]eve phone tunnel[/cyan]")
 
     if faltando:
         console.print(f"\n  [yellow]Sem {', '.join(faltando)} a EVE não fala com a nuvem.[/yellow]")

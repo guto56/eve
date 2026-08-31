@@ -50,15 +50,25 @@ o Deepgram quanto o Cartesia falam esse formato direto — o som da chamada não
 passa por conversão nenhuma. A conversa é a mesma do chat: mesmo motor, mesmas
 ferramentas, mesma memória.
 
+O `eve setup` pergunta se você quer telefone e cuida do resto: pede as chaves
+do Twilio, descobre os números da conta e guarda o que a EVE vai atender. O
+instalador só traz o `cloudflared` se você disser que sim.
+
+Depois, um comando põe o telefone no ar:
+
 ```bash
-eve key set TWILIO_AUTH_TOKEN
-eve phone allow +5531999998888    # só quem está na lista fala com ela
-eve phone tunnel                  # abre o endereço público e mostra o que colar
-eve phone status                  # o que ainda falta
+eve phone tunnel     # abre o endereço e aponta seu número para cá
 ```
 
-O `tunnel` usa `cloudflared` (`brew install cloudflared`) e mostra a URL para
-colar no painel do Twilio, em *número ▸ Voice ▸ A call comes in*.
+Ele aponta sozinho porque precisa: o endereço do túnel muda toda vez que ele
+sobe, e colar a URL nova no painel do Twilio a cada reinício seria o contrário
+de plug and play. Enquanto o comando estiver aberto, o telefone toca.
+
+```bash
+eve phone status               # o que ainda falta
+eve phone allow +5531999998888 # quem mais pode ligar
+eve phone number               # trocar o número que ela atende
+```
 
 **A telefonia sobe num app próprio, numa porta própria.** Um túnel expõe uma
 porta inteira: se fosse a do Core, `/api/tools/file.trash/call` estaria na
