@@ -114,7 +114,24 @@ async def _atender_telefone(app: FastAPI) -> Any:
         access_log=False,
     )
     servidor = uvicorn.Server(config)
-    app.state.telefone_tarefa = asyncio.create_task(servidor.serve())
+
+    async def servir() -> None:
+        """A telefonia é opcional; não pode derrubar o assistente.
+
+        A porta pode estar ocupada — por outro EVE, por outra coisa qualquer.
+        Sem isto, um `address already in use` no telefone matava o Core, e
+        quem não usa telefone nem entenderia por quê.
+        """
+        try:
+            await servidor.serve()
+        except asyncio.CancelledError:
+            raise
+        except (Exception, SystemExit) as exc:
+            # SystemExit, e não só Exception: o uvicorn sai por `sys.exit`
+            # quando não consegue a porta, e SystemExit não é Exception.
+            log.warning("telefone.nao_subiu", porta=telefone.port, error=str(exc)[:160])
+
+    app.state.telefone_tarefa = asyncio.create_task(servir())
     log.info("telefone.no_ar", porta=telefone.port, permitidos=len(telefone.allowed_callers))
     return servidor
 

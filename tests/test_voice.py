@@ -99,3 +99,57 @@ def test_marcacao_nao_vai_para_o_sintetizador() -> None:
     # Texto sem marcação passa intacto — inclusive asterisco no meio da palavra.
     assert so_fala("nada muda aqui") == "nada muda aqui"
     assert so_fala("2 * 3 = 6") == "2 * 3 = 6"
+
+
+async def test_pedido_em_duas_partes_chega_inteiro() -> None:
+    """Regressão: "abre o YouTube" — respiro — "e em outra aba pesquisa o
+    dólar" chegava como duas conversas, e a segunda, sozinha, é só uma
+    pesquisa. O usuário via a busca acontecer e a aba nunca abrir."""
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from eve.config import VoiceSettings
+    from eve.voice.session import VoiceSession
+    from eve.voice.stt import Transcript
+
+    engine = AsyncMock()
+    sessao = VoiceSession(
+        engine, AsyncMock(), AsyncMock(), VoiceSettings(settle_ms=120), AsyncMock(), AsyncMock()
+    )
+    respondido: list[str] = []
+    sessao._respond = respondido.append  # type: ignore[method-assign]
+
+    await sessao._on_transcript(Transcript("abre o youtube", True, True))
+    await sessao._on_transcript(Transcript("e em outra aba pesquisa o dolar", True, True))
+    await asyncio.sleep(0.3)
+
+    assert respondido == ["abre o youtube e em outra aba pesquisa o dolar"]
+
+
+async def test_frase_sozinha_nao_espera_alem_do_necessario() -> None:
+    """A espera é o preço da frase composta; não pode virar preço de tudo."""
+    import asyncio
+    import time
+    from unittest.mock import AsyncMock
+
+    from eve.config import VoiceSettings
+    from eve.voice.session import VoiceSession
+    from eve.voice.stt import Transcript
+
+    sessao = VoiceSession(
+        AsyncMock(),
+        AsyncMock(),
+        AsyncMock(),
+        VoiceSettings(settle_ms=120),
+        AsyncMock(),
+        AsyncMock(),
+    )
+    quando: list[float] = []
+    sessao._respond = lambda t: quando.append(time.perf_counter())  # type: ignore[method-assign]
+
+    inicio = time.perf_counter()
+    await sessao._on_transcript(Transcript("que horas sao", True, True))
+    await asyncio.sleep(0.3)
+
+    assert len(quando) == 1
+    assert quando[0] - inicio < 0.28

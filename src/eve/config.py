@@ -129,6 +129,15 @@ class VoiceSettings(BaseModel):
     live_output_rate: int = 24000
     """Taxas exigidas pelo Live API: 16 kHz na entrada, 24 kHz na saída."""
 
+    settle_ms: int = 450
+    """Quanto esperar, depois de a frase fechar, para ver se ainda vem mais.
+
+    O Deepgram fecha a frase a cada silêncio curto, e um pedido composto tem
+    silêncio no meio: "abre o YouTube" — respiro — "e em outra aba pesquisa o
+    dólar" chegava como duas conversas, e a segunda, sozinha, é só uma
+    pesquisa. Custa esses milissegundos no começo da resposta; custaria a
+    intenção inteira não esperar."""
+
     barge_in: bool = True
     """Interromper a fala da EVE quando o usuário começa a falar."""
 

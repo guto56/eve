@@ -692,8 +692,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
   overflow: hidden;
 }
 .esfera {
-  width: min(62vh, 82vw, 560px);
-  height: min(62vh, 82vw, 560px);
+  width: min(44vh, 62vw, 380px);
+  height: min(44vh, 62vw, 380px);
   display: block;
 }
 /* O halo acompanha o estado: some quando ela está parada, respira quando

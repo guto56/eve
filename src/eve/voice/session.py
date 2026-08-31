@@ -67,7 +67,10 @@ class VoiceState:
     speaking: bool = False
     session: str | None = None
     partial: str = ""
+    pendente: str = ""
+    """Frases já fechadas, esperando para ver se o usuário continua."""
     fala_atual: asyncio.Task[None] | None = field(default=None, repr=False)
+    juntando: asyncio.Task[None] | None = field(default=None, repr=False)
 
 
 class VoiceSession:
@@ -122,7 +125,30 @@ class VoiceSession:
         await self.engine.bus.emit(EventType.VOICE_TRANSCRIPT, source="voice", text=transcript.text)
         if transcript.speech_final:
             self.state.partial = ""
-            await self._respond(transcript.text)
+            self._juntar(transcript.text)
+
+    def _juntar(self, texto: str) -> None:
+        """Guarda a frase e espera um instante para ver se vem mais.
+
+        Um pedido com duas partes tem silêncio no meio, e o transcritor fecha a
+        frase nesse silêncio. Responder na hora quebra o pedido ao meio:
+        "abre o YouTube" vira uma conversa e "e em outra aba pesquisa o dólar"
+        vira outra — e a segunda, sozinha, é só uma pesquisa.
+        """
+        self.state.pendente = f"{self.state.pendente} {texto}".strip()
+        if self.state.juntando is not None:
+            self.state.juntando.cancel()
+        self.state.juntando = asyncio.create_task(self._responder_quando_parar())
+
+    async def _responder_quando_parar(self) -> None:
+        try:
+            await asyncio.sleep(self.settings.settle_ms / 1000)
+        except asyncio.CancelledError:
+            return
+        texto, self.state.pendente = self.state.pendente, ""
+        self.state.juntando = None
+        if texto:
+            await self._respond(texto)
 
     # -------------------------------------------------------------- saída
 
@@ -192,6 +218,9 @@ class VoiceSession:
         log.info("voz.interrompida")
 
     async def aclose(self) -> None:
+        if self.state.juntando is not None:
+            self.state.juntando.cancel()
+            self.state.juntando = None
         # No encerramento o socket do cliente já pode ter caído; cancelar a
         # fala é o que importa, avisar é opcional.
         tarefa = self.state.fala_atual
