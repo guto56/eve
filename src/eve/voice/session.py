@@ -209,6 +209,15 @@ class VoiceSession:
         async for pedaco in self.tts.stream(texto):
             await self.send_audio(pedaco)
 
+    async def interromper(self) -> None:
+        """Cala a boca agora.
+
+        Existe para quem ouve de fora — a página que transcreve no navegador
+        avisa daqui que o usuário voltou a falar, já que não é o Deepgram que
+        percebe isso.
+        """
+        await self._interrupt()
+
     async def _interrupt(self) -> None:
         tarefa = self.state.fala_atual
         if tarefa is not None and not tarefa.done():

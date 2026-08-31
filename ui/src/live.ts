@@ -44,8 +44,8 @@ export class LiveClient {
   private tocando: AudioBufferSourceNode[] = [];
   private outputRate = 24000;
   private nativo = false;
+  private falandoAgora = false;
   private reconhecimento: any = null;
-  private pendente = "";
   private analiseSaida: AnalyserNode | null = null;
   private analiseEntrada: AnalyserNode | null = null;
   private amostra = new Uint8Array(64);
@@ -139,13 +139,11 @@ export class LiveClient {
       return;
     }
     const frame = JSON.parse(evento.data as string) as LiveEvent;
+    if (frame.kind === "speaking") this.falandoAgora = frame.on;
     if (frame.kind === "ready") {
       this.outputRate = frame.outputRate || 24000;
       this.nativo = frame.engine === "nativo";
     }
-    // No modo nativo a resposta chega em texto e quem fala é o navegador.
-    if (this.nativo && frame.kind === "reply") this.acumular(frame.text);
-    if (this.nativo && frame.kind === "turn") this.dizer();
     if (frame.kind === "interrupted") this.silenciar();
     this.onEvent(frame);
   }
@@ -231,7 +229,12 @@ export class LiveClient {
           parcial += t;
         }
       }
-      if (parcial) this.onEvent({ kind: "partial", text: parcial });
+      if (parcial) {
+        // Quem percebe que o usuário voltou a falar é o navegador, não o
+        // servidor: sem este aviso a EVE seguiria falando por cima.
+        if (this.falandoAgora) this.pedirSilencio();
+        this.onEvent({ kind: "partial", text: parcial });
+      }
     };
     // O reconhecimento para sozinho depois de um tempo calado; religar mantém
     // a conversa aberta enquanto o usuário não encerrar.
@@ -261,33 +264,10 @@ export class LiveClient {
     this.onEvent({ kind: "listening", on: true });
   }
 
-  private acumular(texto: string) {
-    this.pendente += texto;
-    // Fala assim que houver frase pronta: esperar a resposta inteira colocaria
-    // de volta a espera que o modo nativo existe para tirar.
-    const corte = this.pendente.search(/[.!?…]\s|[.!?…]$/);
-    if (corte > 20) {
-      const trecho = this.pendente.slice(0, corte + 1);
-      this.pendente = this.pendente.slice(corte + 1);
-      this.falar(trecho);
-    }
-  }
-
-  private dizer() {
-    const resto = this.pendente.trim();
-    this.pendente = "";
-    if (resto) this.falar(resto);
-  }
-
-  /** Fala com a voz do sistema. Nada sai da máquina. */
-  private falar(texto: string) {
-    const fala = new SpeechSynthesisUtterance(texto);
-    fala.lang = "pt-BR";
-    const voz = speechSynthesis.getVoices().find((v) => v.lang.startsWith("pt") && v.localService);
-    if (voz) fala.voice = voz;
-    fala.onstart = () => this.onEvent({ kind: "speaking", on: true });
-    fala.onend = () => this.onEvent({ kind: "speaking", on: false });
-    speechSynthesis.speak(fala);
+  private pedirSilencio() {
+    this.falandoAgora = false;
+    this.silenciar();
+    this.socket?.send(JSON.stringify({ op: "calar" }));
   }
 
   /** Quanto som está passando agora, de 0 a 1. */
@@ -321,8 +301,6 @@ export class LiveClient {
         /* já parado */
       }
     }
-    speechSynthesis.cancel();
-    this.pendente = "";
     this.node?.disconnect();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.capture?.close().catch(() => {});

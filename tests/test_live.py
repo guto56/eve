@@ -17,16 +17,28 @@ from eve.daemon.routes.live import _declaracoes, _motor, _podar
 from eve.voice.live import TAXA_ENTRADA, TAXA_SAIDA, SessaoLive, _traduzir, explicar
 
 
-def test_sem_chave_nenhuma_ainda_da_para_conversar() -> None:
-    """O motor nativo não precisa de chave: o navegador ouve e fala.
-
-    Antes, sem credencial a página só sabia dizer o que faltava. Agora falta
-    de chave não é mais motivo para não conversar — é motivo para a voz ser a
-    do sistema."""
+def test_sem_chave_nenhuma_a_pagina_diz_o_que_falta() -> None:
+    """Erro sem instrução é erro que o usuário não resolve."""
     with TestClient(create_app()) as client, client.websocket_connect("/ws/live") as ws:
-        pronta = ws.receive_json()
-    assert pronta["kind"] == "ready"
-    assert pronta["engine"] == "nativo"
+        aviso = ws.receive_json()
+    assert aviso["fatal"] is True
+    assert "nenhum motor" in aviso["error"]
+    assert "CARTESIA_API_KEY" in aviso["hint"]
+
+
+def test_ouvido_nativo_dispensa_o_deepgram_mas_nao_a_voz() -> None:
+    """O navegador ouve de graça; quem fala continua sendo o Cartesia."""
+    from eve.daemon.routes.live import _motor
+
+    app = create_app()
+    escolhido, falta = _motor(app, "nativo")
+    assert escolhido == "nativo"
+    assert falta is not None and "CARTESIA_API_KEY" in falta[0]
+
+    app.state.secrets.set("CARTESIA_API_KEY", "c")
+    assert _motor(app, "nativo") == ("nativo", None)
+    # Só com a voz, `auto` escolhe o nativo: falta o ouvido pago, não a fala.
+    assert _motor(app, "auto")[0] == "nativo"
 
 
 def test_pedir_motor_sem_chave_diz_o_que_falta() -> None:
@@ -48,9 +60,6 @@ def test_motor_escolhido_segue_o_que_a_maquina_tem() -> None:
     """Dizer "automático" e falhar por falta de chave é escolher errado e
     culpar o usuário."""
     app = create_app()
-
-    # O nativo nunca falta: não depende de credencial nenhuma.
-    assert _motor(app, "nativo") == ("nativo", None)
 
     app.state.secrets.set("DEEPGRAM_API_KEY", "d")
     app.state.secrets.set("CARTESIA_API_KEY", "c")

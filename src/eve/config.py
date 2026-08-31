@@ -116,10 +116,9 @@ class VoiceSettings(BaseModel):
     ``gemini``: um modelo só, que ouve e fala. Menos latência por não trocar de
     mãos, e exige uma GOOGLE_API_KEY à parte.
 
-    ``nativo``: o navegador ouve e fala, com o que o macOS já traz. Nenhuma
-    chave, nenhum áudio subindo nem descendo — pelo socket passa só texto — e
-    por isso é o mais rápido. A voz é a do sistema, mais dura que a do
-    Cartesia; é a troca que se faz."""
+    ``nativo``: o mesmo que ``openrouter``, mas quem ouve é o navegador. A
+    transcrição chega pronta, então pelo socket sobe texto em vez de áudio e o
+    Deepgram sai da conta. A resposta continua na voz do Cartesia."""
 
     live_model: str = "gemini-3.1-flash-live-preview"
     """Modelo da conversa ao vivo: um só, que ouve e fala, sem STT nem TTS no meio.

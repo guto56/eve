@@ -78,7 +78,7 @@ async def live_endpoint(
         return
 
     if escolhido == "nativo":
-        await _conversa_so_texto(websocket, app, avisar)
+        await _conversa_ouvido_nativo(websocket, app, avisar, falar)
         return
     if escolhido == "openrouter":
         await _conversa_em_partes(websocket, app, avisar, falar)
@@ -257,29 +257,56 @@ async def _instrucoes(app: Any) -> str:
     return f"{INSTRUCOES}\n\n{contexto}" if contexto else INSTRUCOES
 
 
-async def _conversa_so_texto(websocket: WebSocket, app: Any, avisar: Any) -> None:
-    """O navegador ouve e fala; aqui só passa texto.
+async def _conversa_ouvido_nativo(websocket: WebSocket, app: Any, avisar: Any, falar: Any) -> None:
+    """O navegador ouve; a EVE pensa e o Cartesia fala.
 
-    Sem Deepgram e sem Cartesia: o macOS já sabe transcrever e falar, e o
-    navegador dá acesso aos dois. Pelo socket não sobe nem desce áudio — o que
-    torna este o caminho mais rápido dos três, e o único sem chave nenhuma.
+    É o caminho normal sem o Deepgram: a transcrição vem pronta do próprio
+    navegador, então pelo socket sobe texto em vez de áudio. A resposta
+    continua vindo na voz do Cartesia — trocar a boca junto seria trocar o que
+    ninguém pediu.
     """
     import json
+
+    from eve.voice.session import VoiceSession
+    from eve.voice.tts import TextToSpeech
+
+    voz = app.state.settings.voice
+    try:
+        tts = TextToSpeech(
+            app.state.secrets.get("CARTESIA_API_KEY") or "",
+            app.state.secrets.get("CARTESIA_VOICE_ID") or "",
+            model=voz.tts_model,
+            language=voz.tts_language,
+            sample_rate=voz.output_sample_rate,
+        )
+    except ValueError as exc:
+        await avisar({"kind": "error", "fatal": True, "error": str(exc)})
+        await websocket.close()
+        return
+
+    async def traduzir(payload: dict[str, Any]) -> None:
+        tipo = DE_VOZ.get(str(payload.get("type")))
+        if tipo is not None:
+            await avisar({**{k: v for k, v in payload.items() if k != "type"}, "kind": tipo})
 
     await avisar(
         {
             "kind": "ready",
             "engine": "nativo",
             "inputRate": 0,
-            "outputRate": 0,
+            "outputRate": voz.output_sample_rate,
             "model": app.state.providers.model_for("external"),
-            "voice": "do sistema",
-            "incremental": False,
+            "voice": "Cartesia",
+            "incremental": True,
             "tools": ["a conversa inteira da EVE"],
         }
     )
 
-    sessao_id: str | None = None
+    # Sessão de voz sem transcritor: `listen` e `feed` nunca são chamados,
+    # porque quem ouve é o navegador. O resto — cortar em frases, falar, ser
+    # interrompida — é o mesmo de sempre.
+    sessao = VoiceSession(app.state.chat, _SemOuvido(), tts, voz, traduzir, falar)
+    aquecimento = asyncio.create_task(tts.warm_up())
     try:
         while True:
             mensagem = await websocket.receive()
@@ -292,30 +319,27 @@ async def _conversa_so_texto(websocket: WebSocket, app: Any, avisar: Any) -> Non
                 dados = json.loads(bruto)
             except json.JSONDecodeError:
                 continue
-            if dados.get("op") != "texto":
-                continue
-            texto = str(dados.get("text", "")).strip()
-            if not texto:
-                continue
-            sessao_id = await _responder(app, avisar, texto, sessao_id)
+            if dados.get("op") == "calar":
+                # O usuário voltou a falar por cima: cala na hora.
+                await sessao.interromper()
+            elif dados.get("op") == "texto" and (texto := str(dados.get("text", "")).strip()):
+                await avisar({"kind": "final", "text": texto})
+                await sessao.responder(texto)
     except (WebSocketDisconnect, RuntimeError) as exc:
         log.info("live.encerrada", motivo=str(exc)[:120])
+    finally:
+        aquecimento.cancel()
+        await asyncio.gather(aquecimento, return_exceptions=True)
+        await sessao.aclose()
+        await tts.aclose()
 
 
-async def _responder(app: Any, avisar: Any, texto: str, sessao: str | None) -> str | None:
-    """Manda pelo motor de conversa e devolve o que ele for dizendo."""
-    await avisar({"kind": "final", "text": texto})
-    async for evento in app.state.chat.send(texto, sessao, source="live"):
-        if evento.kind == "session":
-            sessao = evento.data["session"]
-        elif evento.kind == "delta":
-            await avisar({"kind": "reply", "text": evento.data["text"]})
-        elif evento.kind == "tool":
-            await avisar({"kind": "tool", "name": evento.data["name"], "arguments": {}})
-        elif evento.kind == "error":
-            await avisar({"kind": "error", "error": evento.data["error"]})
-    await avisar({"kind": "turn"})
-    return sessao
+class _SemOuvido:
+    """Transcritor que não existe: quem ouve, aqui, é o navegador."""
+
+    async def send_audio(self, frame: bytes) -> None: ...
+
+    async def aclose(self) -> None: ...
 
 
 def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
@@ -326,12 +350,17 @@ def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
     escolher errado e culpar o usuário.
     """
     tem_gemini = bool(app.state.secrets.get("GOOGLE_API_KEY"))
-    tem_partes = bool(
-        app.state.secrets.get("DEEPGRAM_API_KEY") and app.state.secrets.get("CARTESIA_API_KEY")
-    )
+    tem_fala = bool(app.state.secrets.get("CARTESIA_API_KEY"))
+    tem_partes = bool(app.state.secrets.get("DEEPGRAM_API_KEY")) and tem_fala
 
     if pedido == "nativo":
-        return "nativo", None
+        # O navegador ouve de graça, mas quem fala é o Cartesia.
+        if tem_fala:
+            return "nativo", None
+        return "nativo", (
+            "CARTESIA_API_KEY não configurada",
+            "grave com: eve key set CARTESIA_API_KEY",
+        )
     if pedido == "gemini":
         if tem_gemini:
             return "gemini", None
@@ -348,20 +377,21 @@ def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
         )
 
     preferido = app.state.settings.voice.live_engine
-    disponibilidade = {"nativo": True, "openrouter": tem_partes, "gemini": tem_gemini}
+    disponibilidade = {"nativo": tem_fala, "openrouter": tem_partes, "gemini": tem_gemini}
     for candidato, disponivel in (
         (preferido, disponibilidade.get(preferido, False)),
         ("openrouter", tem_partes),
+        # O nativo vem antes do gemini porque usa a mesma voz do caminho
+        # principal, e depois do openrouter porque a transcrição do navegador
+        # é mais pobre que a do Deepgram.
+        ("nativo", tem_fala),
         ("gemini", tem_gemini),
-        # O nativo é o último porque a voz do sistema é mais dura — mas é o
-        # único que funciona sem chave nenhuma, então nunca falta.
-        ("nativo", True),
     ):
         if disponivel:
             return candidato, None
     return "openrouter", (
         "nenhum motor de voz configurado",
-        "grave DEEPGRAM_API_KEY e CARTESIA_API_KEY, ou GOOGLE_API_KEY",
+        "grave CARTESIA_API_KEY (e DEEPGRAM_API_KEY), ou GOOGLE_API_KEY",
     )
 
 
