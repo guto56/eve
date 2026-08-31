@@ -63,8 +63,13 @@ def test_motor_escolhido_segue_o_que_a_maquina_tem() -> None:
 
     app.state.secrets.set("DEEPGRAM_API_KEY", "d")
     app.state.secrets.set("CARTESIA_API_KEY", "c")
-    assert _motor(app, "auto") == ("openrouter", None)
+    # "auto" segue o que está configurado, não um nome fixo aqui.
+    assert _motor(app, "auto") == (app.state.settings.voice.live_engine, None)
     assert _motor(app, "openrouter") == ("openrouter", None)
+
+    # E cai para o próximo quando o preferido não tem como rodar.
+    app.state.settings.voice.live_engine = "gemini"
+    assert _motor(app, "auto")[0] != "gemini"
 
     # Pedido explícito sem a chave devolve o que falta, não outro motor.
     escolhido, falta = _motor(app, "gemini")

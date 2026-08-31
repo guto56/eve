@@ -32,14 +32,12 @@ Uma página própria, no menu à direita. Dois motores, escolhidos por
 
 | Motor | Como funciona | Precisa de |
 | --- | --- | --- |
-| `openrouter` (padrão) | Deepgram ouve, o modelo pensa, Cartesia fala — passando pelo motor de conversa da EVE, com rota, ferramentas e memória iguais aos do chat | `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY` |
-| `nativo` | o mesmo, mas quem ouve é o navegador: a transcrição chega pronta, sobe texto em vez de áudio, e o Deepgram sai da conta | `CARTESIA_API_KEY` |
+| `nativo` (padrão) | o navegador captura e transcreve, o modelo pensa, o Cartesia responde — pelo socket sobe texto, e nenhum áudio seu sai da máquina | `CARTESIA_API_KEY` |
+| `openrouter` | o mesmo, com o Deepgram no lugar do ouvido do navegador: entende português melhor com ruído | `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY` |
 | `gemini` | um modelo só, que ouve e fala; menos latência por não trocar de mãos | `GOOGLE_API_KEY` |
 
-O `nativo` usa o reconhecimento do próprio navegador. Se o pacote de idioma
-estiver instalado, roda no aparelho e o áudio não sai da máquina; senão, o
-navegador usa o serviço dele. A transcrição é mais pobre que a do Deepgram —
-é a troca. Para experimentar sem mexer na configuração: `?motor=nativo`.
+Você abre a página, aperta o botão e fala. A escolha do motor está na
+configuração (`ai.live_engine`) porque é decisão de instalação, não de uso.
 
 No caminho do Gemini as ferramentas não vão para o Google executar: ele pede, e
 quem executa é o Tool Bus daqui, com permissão e auditoria. É por isso que uma

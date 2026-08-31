@@ -106,7 +106,7 @@ class VoiceSettings(BaseModel):
     tts_language: str = "pt"
     output_sample_rate: int = Field(default=24000, gt=0)
 
-    live_engine: Literal["nativo", "openrouter", "gemini"] = "openrouter"
+    live_engine: Literal["nativo", "openrouter", "gemini"] = "nativo"
     """Quem conduz a conversa ao vivo.
 
     ``openrouter``: Deepgram ouve, o modelo do OpenRouter pensa, Cartesia fala.
@@ -116,9 +116,11 @@ class VoiceSettings(BaseModel):
     ``gemini``: um modelo só, que ouve e fala. Menos latência por não trocar de
     mãos, e exige uma GOOGLE_API_KEY à parte.
 
-    ``nativo``: o mesmo que ``openrouter``, mas quem ouve é o navegador. A
-    transcrição chega pronta, então pelo socket sobe texto em vez de áudio e o
-    Deepgram sai da conta. A resposta continua na voz do Cartesia."""
+    ``nativo`` é o padrão: o navegador captura e transcreve, o modelo pensa, o
+    Cartesia responde. Sobe texto em vez de áudio e o Deepgram sai da conta.
+
+    ``openrouter`` troca o ouvido do navegador pelo Deepgram, que entende
+    português melhor com ruído. ``gemini`` é um modelo só, que ouve e fala."""
 
     live_model: str = "gemini-3.1-flash-live-preview"
     """Modelo da conversa ao vivo: um só, que ouve e fala, sem STT nem TTS no meio.
