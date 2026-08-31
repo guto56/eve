@@ -50,14 +50,22 @@ class SpeechToText:
         language: str = "pt-BR",
         sample_rate: int = 16000,
         endpointing_ms: int = 300,
+        encoding: str = "linear16",
     ) -> None:
+        """``encoding`` muda para ``mulaw`` no telefone.
+
+        A linha telefônica é μ-law a 8 kHz. O Deepgram aceita esse formato
+        direto, então o áudio da chamada chega sem passar por conversão
+        nenhuma — e conversão de áudio é onde a voz perde qualidade e ganha
+        latência de graça.
+        """
         if not api_key:
             raise ValueError("DEEPGRAM_API_KEY não configurada")
         self.api_key = api_key
         self.params = {
             "model": model,
             "language": language,
-            "encoding": "linear16",
+            "encoding": encoding,
             "sample_rate": str(sample_rate),
             "channels": "1",
             "interim_results": "true",

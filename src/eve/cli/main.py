@@ -23,6 +23,7 @@ from eve.cli.ai_cmd import ask, key_app, provider_app
 from eve.cli.chat_cmd import chat as chat_cmd
 from eve.cli.ext_cmd import mcp_app, skill_app
 from eve.cli.memory_cmd import memory_app
+from eve.cli.phone_cmd import phone_app
 from eve.cli.service_cmd import service_app
 from eve.cli.service_cmd import uninstall as uninstall_cmd
 from eve.cli.service_cmd import update as update_cmd
@@ -68,6 +69,7 @@ app.add_typer(skill_app)
 app.add_typer(mcp_app)
 app.add_typer(task_app)
 app.add_typer(watch_app)
+app.add_typer(phone_app)
 app.add_typer(service_app)
 app.command(name="setup")(setup_cmd)
 app.command(name="update")(update_cmd)

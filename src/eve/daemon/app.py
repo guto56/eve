@@ -91,6 +91,34 @@ async def _com_prazo(etapa: str, tarefa: Any, prazo: float = PRAZO_ENCERRAMENTO)
     return None
 
 
+async def _atender_telefone(app: FastAPI) -> Any:
+    """Sobe o app de telefonia numa porta própria, se estiver ligado.
+
+    Porta própria porque é ela que o túnel expõe: pôr as rotas do Twilio no
+    Core deixaria `/api` inteira na internet junto.
+    """
+    telefone = app.state.settings.phone
+    app.state.telefone_tarefa = None
+    if not telefone.enabled:
+        return None
+
+    import uvicorn
+
+    from eve.phone.app import criar_app_telefone
+
+    config = uvicorn.Config(
+        app=criar_app_telefone(app),
+        host="127.0.0.1",
+        port=telefone.port,
+        log_config=None,
+        access_log=False,
+    )
+    servidor = uvicorn.Server(config)
+    app.state.telefone_tarefa = asyncio.create_task(servidor.serve())
+    log.info("telefone.no_ar", porta=telefone.port, permitidos=len(telefone.allowed_callers))
+    return servidor
+
+
 async def _conferir_cofre(app: FastAPI) -> None:
     """Acerta o índice com os arquivos e passa a acompanhá-los ao vivo."""
     await app.state.memory.reconciliar()
@@ -118,6 +146,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # apagou uma nota, escreveu outra à mão. O índice acerta o passo agora, e
     # o observador mantém o passo enquanto ela roda.
     conferencia = asyncio.create_task(_conferir_cofre(app))
+    telefone = await _atender_telefone(app)
 
     await bus.emit(EventType.SYSTEM_STARTED, version=__version__, pid=os.getpid())
     log.info(
@@ -135,6 +164,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         conferencia.cancel()
         if app.state.cofre is not None:
             await _com_prazo("cofre.observador", app.state.cofre.stop())
+        if telefone is not None:
+            telefone.should_exit = True
+            await _com_prazo("telefone", app.state.telefone_tarefa)
         await _com_prazo("mcp.conexoes", asyncio.gather(conexoes, return_exceptions=True))
         await _com_prazo("cofre", asyncio.gather(conferencia, return_exceptions=True))
         await _com_prazo("watchers", app.state.watch.aclose())

@@ -33,7 +33,9 @@ class TextToSpeech:
         model: str = "sonic-3",
         language: str = "pt",
         sample_rate: int = 24000,
+        encoding: str = "pcm_s16le",
     ) -> None:
+        """``encoding`` vira ``pcm_mulaw`` no telefone — é o que a linha fala."""
         if not api_key:
             raise ValueError("CARTESIA_API_KEY não configurada")
         if not voice_id:
@@ -43,6 +45,7 @@ class TextToSpeech:
         self.model = model
         self.language = language
         self.sample_rate = sample_rate
+        self.encoding = encoding
         self._socket: Any = None
         self._lock = asyncio.Lock()
 
@@ -57,7 +60,7 @@ class TextToSpeech:
             "language": self.language,
             "output_format": {
                 "container": "raw",
-                "encoding": "pcm_s16le",
+                "encoding": self.encoding,
                 "sample_rate": self.sample_rate,
             },
             "context_id": context_id,

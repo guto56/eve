@@ -43,6 +43,38 @@ caminho paralelo sem regra.
 `auto` prefere o motor que a máquina consegue rodar agora; faltando tudo, a
 página diz o que falta e não pede o microfone.
 
+## Telefone
+
+Dá para ligar para a EVE e conversar. O áudio da linha é μ-law a 8 kHz, e tanto
+o Deepgram quanto o Cartesia falam esse formato direto — o som da chamada não
+passa por conversão nenhuma. A conversa é a mesma do chat: mesmo motor, mesmas
+ferramentas, mesma memória.
+
+```bash
+eve key set TWILIO_AUTH_TOKEN
+eve phone allow +5531999998888    # só quem está na lista fala com ela
+eve phone tunnel                  # abre o endereço público e mostra o que colar
+eve phone status                  # o que ainda falta
+```
+
+O `tunnel` usa `cloudflared` (`brew install cloudflared`) e mostra a URL para
+colar no painel do Twilio, em *número ▸ Voice ▸ A call comes in*.
+
+**A telefonia sobe num app próprio, numa porta própria.** Um túnel expõe uma
+porta inteira: se fosse a do Core, `/api/tools/file.trash/call` estaria na
+internet. Nessa porta existem duas rotas, as duas do Twilio, e mais nada.
+
+Três provas independentes, e a chamada precisa passar nas três:
+
+1. **a assinatura do Twilio**, que prova que o pedido veio dele;
+2. **o número de quem liga**, contra a lista que você escreve — vazia recusa
+   todo mundo, porque um número de telefone é público por natureza;
+3. **um bilhete de uso único** na URL do áudio, senão o WebSocket seria um
+   caminho que pula as duas primeiras.
+
+Nenhuma basta sozinha: a primeira não diz *quem* ligou, a segunda é
+falsificável sem a primeira, e a terceira só protege o segundo salto.
+
 ## Onde a EVE pensa
 
 | Modo | O que roda aqui | O que isso custa |

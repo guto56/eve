@@ -133,6 +133,38 @@ class VoiceSettings(BaseModel):
     """Interromper a fala da EVE quando o usuário começa a falar."""
 
 
+class PhoneSettings(BaseModel):
+    """Falar com a EVE por telefone (spec §32).
+
+    O ponto delicado não é o áudio: é que atender o telefone significa deixar
+    algo da EVE alcançável pela internet. Por isso a telefonia sobe num app
+    próprio, numa porta própria, com as rotas do Twilio e mais nada — a API
+    continua só em 127.0.0.1, onde sempre esteve.
+    """
+
+    enabled: bool = False
+    port: int = Field(default=4243, ge=1, le=65535)
+    """Porta do app de telefonia. É esta que o túnel expõe, nunca a do Core."""
+
+    allowed_callers: list[str] = Field(default_factory=list)
+    """Quem pode falar com a EVE, em E.164 (``+5531999998888``).
+
+    Lista vazia recusa todo mundo, de propósito. Um número de telefone é
+    público por natureza: sem lista, quem descobrisse o número conversaria com
+    o seu assistente e leria a sua memória."""
+
+    public_url: str = ""
+    """Endereço público do túnel, como o Twilio o vê (``https://algo.trycloudflare.com``).
+
+    O Twilio assina a URL pública, não a que chega aqui: atrás de um túnel o
+    host muda no caminho, e conferir a assinatura contra o endereço local
+    reprovaria toda chamada legítima. Vazio deduz pelos cabeçalhos."""
+
+    greeting: str = "Oi, aqui é a EVE. Pode falar."
+    sample_rate: int = 8000
+    """A linha telefônica é 8 kHz μ-law. Não é escolha, é o que a rede entrega."""
+
+
 class WatchSettings(BaseModel):
     """Um caminho observado (spec §30)."""
 
@@ -214,6 +246,7 @@ class Settings(BaseSettings):
     files: FileSettings = FileSettings()
     memory: MemorySettings = MemorySettings()
     voice: VoiceSettings = VoiceSettings()
+    phone: PhoneSettings = PhoneSettings()
     mcp: list[MCPServerSettings] = Field(default_factory=list)
     proactive: ProactiveSettings = ProactiveSettings()
     watch: list[WatchSettings] = Field(default_factory=list)
