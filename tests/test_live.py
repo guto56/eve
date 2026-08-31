@@ -17,19 +17,40 @@ from eve.daemon.routes.live import _declaracoes, _motor, _podar
 from eve.voice.live import TAXA_ENTRADA, TAXA_SAIDA, SessaoLive, _traduzir, explicar
 
 
-def test_sem_chave_nenhuma_a_pagina_diz_o_que_falta() -> None:
-    """Erro sem instrução é erro que o usuário não resolve."""
+def test_sem_chave_nenhuma_ainda_da_para_conversar() -> None:
+    """O motor nativo não precisa de chave: o navegador ouve e fala.
+
+    Antes, sem credencial a página só sabia dizer o que faltava. Agora falta
+    de chave não é mais motivo para não conversar — é motivo para a voz ser a
+    do sistema."""
     with TestClient(create_app()) as client, client.websocket_connect("/ws/live") as ws:
-        aviso = ws.receive_json()
-    assert aviso["fatal"] is True
-    assert "nenhum motor" in aviso["error"]
-    assert "DEEPGRAM_API_KEY" in aviso["hint"]
+        pronta = ws.receive_json()
+    assert pronta["kind"] == "ready"
+    assert pronta["engine"] == "nativo"
+
+
+def test_pedir_motor_sem_chave_diz_o_que_falta() -> None:
+    """Pedido explícito devolve o que falta, em vez de trocar de motor por
+    conta própria: erro sem instrução é erro que o usuário não resolve."""
+    with TestClient(create_app()) as client:
+        with client.websocket_connect("/ws/live?motor=gemini") as ws:
+            aviso = ws.receive_json()
+        assert aviso["fatal"] is True
+        assert "GOOGLE_API_KEY" in aviso["error"]
+        assert "eve key set" in aviso["hint"]
+
+        with client.websocket_connect("/ws/live?motor=openrouter") as ws:
+            aviso = ws.receive_json()
+        assert "DEEPGRAM_API_KEY" in aviso["error"]
 
 
 def test_motor_escolhido_segue_o_que_a_maquina_tem() -> None:
     """Dizer "automático" e falhar por falta de chave é escolher errado e
     culpar o usuário."""
     app = create_app()
+
+    # O nativo nunca falta: não depende de credencial nenhuma.
+    assert _motor(app, "nativo") == ("nativo", None)
 
     app.state.secrets.set("DEEPGRAM_API_KEY", "d")
     app.state.secrets.set("CARTESIA_API_KEY", "c")

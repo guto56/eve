@@ -165,9 +165,10 @@ def _como_app(alvo: str) -> Target | None:
     if not achados:
         return None
     melhor: App = achados[0]
-    outros = tuple(a.name for a in achados[1:])
+    outros = tuple(a.rotulo for a in achados[1:])
     nota = "" if melhor.score >= 0.95 else f"achei pelo nome parecido ({melhor.score:.0%})"
-    return Target("app", melhor.name, melhor.name, melhor.score, nota, outros)
+    # `value` é o que se manda abrir; `label` é como se fala do app.
+    return Target("app", melhor.name, melhor.rotulo, melhor.score, nota, outros)
 
 
 def _como_servico(alvo: str) -> Target | None:

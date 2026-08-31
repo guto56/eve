@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ApprovalCard, Empty, Panel, TurnView } from "./components";
 import { LivePage } from "./LivePage";
+import type { Motor } from "./live";
 import { useEve } from "./useEve";
 
 export default function App() {
@@ -35,7 +36,7 @@ export default function App() {
     <div className={`app ${pagina === "aovivo" ? "noite" : ""}`}>
       <Menu atual={pagina} onIr={setPagina} onPainel={() => setPainel(true)} />
       {pagina === "aovivo" ? (
-        <LivePage />
+        <LivePage motor={motorPedido()} />
       ) : (
         <Conversa />
       )}
@@ -138,6 +139,14 @@ export default function App() {
 }
 
 type Pagina = "conversa" | "aovivo";
+
+/** `?motor=nativo` na URL, para experimentar sem mexer na configuração. */
+function motorPedido(): Motor {
+  const pedido = new URLSearchParams(location.search).get("motor");
+  return pedido === "nativo" || pedido === "openrouter" || pedido === "gemini"
+    ? pedido
+    : "auto";
+}
 
 /** O menu fica à direita: a leitura é à esquerda, e navegar não disputa com ela. */
 function Menu({

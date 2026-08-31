@@ -106,7 +106,7 @@ class VoiceSettings(BaseModel):
     tts_language: str = "pt"
     output_sample_rate: int = Field(default=24000, gt=0)
 
-    live_engine: Literal["openrouter", "gemini"] = "openrouter"
+    live_engine: Literal["nativo", "openrouter", "gemini"] = "openrouter"
     """Quem conduz a conversa ao vivo.
 
     ``openrouter``: Deepgram ouve, o modelo do OpenRouter pensa, Cartesia fala.
@@ -114,7 +114,12 @@ class VoiceSettings(BaseModel):
     ferramentas e memória são os mesmos do chat.
 
     ``gemini``: um modelo só, que ouve e fala. Menos latência por não trocar de
-    mãos, e exige uma GOOGLE_API_KEY à parte."""
+    mãos, e exige uma GOOGLE_API_KEY à parte.
+
+    ``nativo``: o navegador ouve e fala, com o que o macOS já traz. Nenhuma
+    chave, nenhum áudio subindo nem descendo — pelo socket passa só texto — e
+    por isso é o mais rápido. A voz é a do sistema, mais dura que a do
+    Cartesia; é a troca que se faz."""
 
     live_model: str = "gemini-3.1-flash-live-preview"
     """Modelo da conversa ao vivo: um só, que ouve e fala, sem STT nem TTS no meio.

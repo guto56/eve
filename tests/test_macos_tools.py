@@ -420,3 +420,35 @@ def test_palavra_generica_nao_rouba_o_pedido() -> None:
     # E o que era certo continua certo.
     assert resolve("appstore").value == "App Store"
     assert resolve("chrome").value == "Google Chrome"
+
+
+def test_configuracoes_abre_os_ajustes_e_nao_um_ajudante() -> None:
+    """Regressão: "abre minhas configurações" abria o *Setup Assistant*.
+
+    Duas causas somadas. O macOS em português chama aquilo de "Ajustes", então
+    a palavra do usuário não casava com nada; e no casamento aproximado cinco
+    ajudantes do sistema empatavam, com "Setup" ou "Configuration" no nome.
+    """
+    from eve.macos.resolve import resolve
+
+    for dito in ("configuracoes", "minhas configuracoes", "configurações"):
+        alvo = resolve(dito)
+        assert alvo.kind == "app"
+        assert alvo.value == "System Settings", dito
+
+
+def test_ela_fala_o_nome_que_o_usuario_ve() -> None:
+    """ "Abri Calendar" fala de um app que quem usa o sistema em português não
+    reconhece pelo nome."""
+    from eve.macos.resolve import resolve
+
+    alvo = resolve("calendario")
+    assert alvo.value == "Calendar"  # o que se manda abrir
+    assert alvo.label == "Calendário"  # como se fala dele
+
+
+def test_palavras_que_as_pessoas_usam() -> None:
+    from eve.macos.resolve import resolve
+
+    assert resolve("agenda").value == "Calendar"
+    assert resolve("calculadora").value == "Calculator"

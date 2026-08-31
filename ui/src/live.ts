@@ -32,7 +32,7 @@ export type LiveEvent =
   | { kind: "error"; error: string; fatal?: boolean; hint?: string }
   | { kind: "closed" };
 
-export type Motor = "auto" | "openrouter" | "gemini";
+export type Motor = "auto" | "nativo" | "openrouter" | "gemini";
 
 export class LiveClient {
   private socket: WebSocket | null = null;
@@ -43,6 +43,9 @@ export class LiveClient {
   private proximoInicio = 0;
   private tocando: AudioBufferSourceNode[] = [];
   private outputRate = 24000;
+  private nativo = false;
+  private reconhecimento: any = null;
+  private pendente = "";
   private analiseSaida: AnalyserNode | null = null;
   private analiseEntrada: AnalyserNode | null = null;
   private amostra = new Uint8Array(64);
@@ -81,6 +84,13 @@ export class LiveClient {
     // O microfone só é pedido depois que o servidor aceitou: sem chave, a
     // página não tem por que acender a luz do microfone do usuário.
     //
+    // No motor nativo quem ouve e fala é o navegador: nada de microfone bruto
+    // subindo pelo socket.
+    if (this.nativo) {
+      this.ouvirNativo();
+      return;
+    }
+
     // Sem microfone não há conversa ao vivo: a página é só voz. Encerra a
     // sessão e diz o que fazer, em vez de deixar a esfera acesa esperando uma
     // fala que nunca vai chegar.
@@ -129,7 +139,13 @@ export class LiveClient {
       return;
     }
     const frame = JSON.parse(evento.data as string) as LiveEvent;
-    if (frame.kind === "ready") this.outputRate = frame.outputRate || 24000;
+    if (frame.kind === "ready") {
+      this.outputRate = frame.outputRate || 24000;
+      this.nativo = frame.engine === "nativo";
+    }
+    // No modo nativo a resposta chega em texto e quem fala é o navegador.
+    if (this.nativo && frame.kind === "reply") this.acumular(frame.text);
+    if (this.nativo && frame.kind === "turn") this.dizer();
     if (frame.kind === "interrupted") this.silenciar();
     this.onEvent(frame);
   }
@@ -178,6 +194,102 @@ export class LiveClient {
     this.proximoInicio = 0;
   }
 
+  // ------------------------------------------------------------- nativo
+
+  /** Ouve pelo próprio navegador: sem chave, sem áudio subindo. */
+  private ouvirNativo() {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      this.onEvent({
+        kind: "error",
+        fatal: true,
+        error: "este navegador não sabe ouvir",
+        hint: "use o Chrome ou o Safari, ou troque o motor para openrouter",
+      });
+      return;
+    }
+    const r = new SR();
+    r.lang = "pt-BR";
+    r.continuous = true;
+    r.interimResults = true;
+    // Pede o reconhecimento no próprio aparelho quando houver; sem ele, o
+    // navegador usa o serviço dele.
+    try {
+      r.processLocally = true;
+    } catch {
+      /* navegador antigo */
+    }
+
+    r.onresult = (e: any) => {
+      let parcial = "";
+      for (let i = e.resultIndex; i < e.results.length; i++) {
+        const t = e.results[i][0].transcript;
+        if (e.results[i].isFinal) {
+          this.onEvent({ kind: "final", text: t.trim() });
+          this.socket?.send(JSON.stringify({ op: "texto", text: t.trim() }));
+        } else {
+          parcial += t;
+        }
+      }
+      if (parcial) this.onEvent({ kind: "partial", text: parcial });
+    };
+    // O reconhecimento para sozinho depois de um tempo calado; religar mantém
+    // a conversa aberta enquanto o usuário não encerrar.
+    r.onend = () => {
+      if (this.reconhecimento === r && this.socket) {
+        try {
+          r.start();
+        } catch {
+          /* já estava rodando */
+        }
+      }
+    };
+    r.onerror = (e: any) => {
+      if (e.error === "not-allowed") {
+        this.onEvent({
+          kind: "error",
+          fatal: true,
+          error: "sem acesso ao microfone",
+          hint: "autorize o microfone para este site e tente de novo",
+        });
+        void this.stop();
+      }
+    };
+
+    this.reconhecimento = r;
+    r.start();
+    this.onEvent({ kind: "listening", on: true });
+  }
+
+  private acumular(texto: string) {
+    this.pendente += texto;
+    // Fala assim que houver frase pronta: esperar a resposta inteira colocaria
+    // de volta a espera que o modo nativo existe para tirar.
+    const corte = this.pendente.search(/[.!?…]\s|[.!?…]$/);
+    if (corte > 20) {
+      const trecho = this.pendente.slice(0, corte + 1);
+      this.pendente = this.pendente.slice(corte + 1);
+      this.falar(trecho);
+    }
+  }
+
+  private dizer() {
+    const resto = this.pendente.trim();
+    this.pendente = "";
+    if (resto) this.falar(resto);
+  }
+
+  /** Fala com a voz do sistema. Nada sai da máquina. */
+  private falar(texto: string) {
+    const fala = new SpeechSynthesisUtterance(texto);
+    fala.lang = "pt-BR";
+    const voz = speechSynthesis.getVoices().find((v) => v.lang.startsWith("pt") && v.localService);
+    if (voz) fala.voice = voz;
+    fala.onstart = () => this.onEvent({ kind: "speaking", on: true });
+    fala.onend = () => this.onEvent({ kind: "speaking", on: false });
+    speechSynthesis.speak(fala);
+  }
+
   /** Quanto som está passando agora, de 0 a 1. */
   nivel(saida: boolean): number {
     const analise = saida ? this.analiseSaida : this.analiseEntrada;
@@ -200,6 +312,17 @@ export class LiveClient {
   }
 
   private limpar() {
+    if (this.reconhecimento) {
+      const r = this.reconhecimento;
+      this.reconhecimento = null;
+      try {
+        r.stop();
+      } catch {
+        /* já parado */
+      }
+    }
+    speechSynthesis.cancel();
+    this.pendente = "";
     this.node?.disconnect();
     this.stream?.getTracks().forEach((t) => t.stop());
     this.capture?.close().catch(() => {});

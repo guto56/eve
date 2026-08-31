@@ -45,6 +45,24 @@ class App:
     *Calendar* e "iCal" para o mesmo app — sem nenhuma tabela nossa."""
 
     @property
+    def rotulo(self) -> str:
+        """O nome como o usuário o vê — "Calendário", não "Calendar".
+
+        Dizer "abri Calendar" para quem tem o sistema em português é falar de
+        um app que ele não reconhece pelo nome. O macOS já sabe o nome
+        localizado; é o primeiro apelido que ele devolve.
+        """
+        for apelido in self.aliases:
+            limpo = apelido.removesuffix(".app")
+            if apelido.endswith(".app") and normalizar(limpo) != normalizar(self.name):
+                # NFC: o sistema de arquivos do macOS devolve os acentos
+                # decompostos ("a" + acento), e o resto do mundo os escreve
+                # juntos. Sem isto, "Calendário" daqui não é igual ao
+                # "Calendário" de nenhum outro lugar.
+                return unicodedata.normalize("NFC", limpo)
+        return self.name
+
+    @property
     def keys(self) -> set[str]:
         """Tudo por que este app pode ser chamado, em forma comparável."""
         termos = {self.name, *self.aliases}
@@ -240,6 +258,42 @@ def find_app(consulta: str, limiar: float = LIMIAR) -> App | None:
     return achados[0] if achados else None
 
 
+#: Pastas onde moram os aplicativos que o usuário abre. O resto do sistema
+#: está cheio de ajudantes — "Setup Assistant", "Folder Actions Setup" — que
+#: nunca são o que alguém quis dizer, mas empatam bem no casamento aproximado.
+PASTAS_DO_USUARIO = ("/Applications", "/System/Applications")
+
+#: O que as pessoas dizem, e o que o macOS chama. A maioria dos apelidos vem
+#: do próprio sistema (é de lá que sai "Ajustes" e "Calendário"), mas ninguém
+#: pede "abre o Ajustes": pede as configurações.
+SINONIMOS: dict[str, str] = {
+    "configuracoes": "ajustes",
+    "config": "ajustes",
+    "preferencias": "ajustes",
+    "painel de controle": "ajustes",
+    "agenda": "calendario",
+    "navegador": "safari",
+    "email": "mail",
+    "e-mail": "mail",
+    "correio": "mail",
+    "musica": "music",
+    "fotos": "photos",
+    "arquivos": "finder",
+    "explorador": "finder",
+    "terminal": "terminal",
+    "calculadora": "calculator",
+    "relogio": "clock",
+    "notas": "notes",
+    "lembretes": "reminders",
+    "mensagens": "messages",
+    "camera": "photo booth",
+}
+
+
+def _do_usuario(caminho: Path) -> bool:
+    return str(caminho).startswith(PASTAS_DO_USUARIO)
+
+
 def search_apps(consulta: str, limit: int = 5, limiar: float = LIMIAR) -> list[App]:
     """Aplicativos parecidos, do melhor para o pior.
 
@@ -250,14 +304,20 @@ def search_apps(consulta: str, limit: int = 5, limiar: float = LIMIAR) -> list[A
     alvo = normalizar(consulta)
     if not alvo:
         return []
+    alvos = {alvo, normalizar(SINONIMOS.get(alvo, ""))} - {""}
 
     pontuados: list[App] = []
     for app in installed_apps():
-        score = max((_pontuar(alvo, chave) for chave in app.keys), default=0.0)
+        score = max(
+            (_pontuar(a, chave) for a in alvos for chave in app.keys),
+            default=0.0,
+        )
         if score >= limiar:
             pontuados.append(App(app.name, app.path, score, app.aliases))
 
-    pontuados.sort(key=lambda a: (-a.score, len(a.name)))
+    # Empate no escore é resolvido pelo que a pessoa provavelmente quis: um
+    # aplicativo que ela abre, e não um ajudante do sistema com nome parecido.
+    pontuados.sort(key=lambda a: (-a.score, not _do_usuario(a.path), len(a.name)))
     return pontuados[:limit]
 
 

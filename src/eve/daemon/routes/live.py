@@ -57,7 +57,7 @@ precisar de confirmação, ela aparece na tela; diga que está aguardando."""
 @router.websocket("/ws/live")
 async def live_endpoint(
     websocket: WebSocket,
-    motor: str = Query(default="auto", pattern="^(auto|openrouter|gemini)$"),
+    motor: str = Query(default="auto", pattern="^(auto|nativo|openrouter|gemini)$"),
 ) -> None:
     await websocket.accept()
     app = websocket.app
@@ -77,6 +77,9 @@ async def live_endpoint(
         await websocket.close()
         return
 
+    if escolhido == "nativo":
+        await _conversa_so_texto(websocket, app, avisar)
+        return
     if escolhido == "openrouter":
         await _conversa_em_partes(websocket, app, avisar, falar)
         return
@@ -254,6 +257,67 @@ async def _instrucoes(app: Any) -> str:
     return f"{INSTRUCOES}\n\n{contexto}" if contexto else INSTRUCOES
 
 
+async def _conversa_so_texto(websocket: WebSocket, app: Any, avisar: Any) -> None:
+    """O navegador ouve e fala; aqui só passa texto.
+
+    Sem Deepgram e sem Cartesia: o macOS já sabe transcrever e falar, e o
+    navegador dá acesso aos dois. Pelo socket não sobe nem desce áudio — o que
+    torna este o caminho mais rápido dos três, e o único sem chave nenhuma.
+    """
+    import json
+
+    await avisar(
+        {
+            "kind": "ready",
+            "engine": "nativo",
+            "inputRate": 0,
+            "outputRate": 0,
+            "model": app.state.providers.model_for("external"),
+            "voice": "do sistema",
+            "incremental": False,
+            "tools": ["a conversa inteira da EVE"],
+        }
+    )
+
+    sessao_id: str | None = None
+    try:
+        while True:
+            mensagem = await websocket.receive()
+            if mensagem["type"] == "websocket.disconnect":
+                break
+            bruto = mensagem.get("text")
+            if not bruto:
+                continue
+            try:
+                dados = json.loads(bruto)
+            except json.JSONDecodeError:
+                continue
+            if dados.get("op") != "texto":
+                continue
+            texto = str(dados.get("text", "")).strip()
+            if not texto:
+                continue
+            sessao_id = await _responder(app, avisar, texto, sessao_id)
+    except (WebSocketDisconnect, RuntimeError) as exc:
+        log.info("live.encerrada", motivo=str(exc)[:120])
+
+
+async def _responder(app: Any, avisar: Any, texto: str, sessao: str | None) -> str | None:
+    """Manda pelo motor de conversa e devolve o que ele for dizendo."""
+    await avisar({"kind": "final", "text": texto})
+    async for evento in app.state.chat.send(texto, sessao, source="live"):
+        if evento.kind == "session":
+            sessao = evento.data["session"]
+        elif evento.kind == "delta":
+            await avisar({"kind": "reply", "text": evento.data["text"]})
+        elif evento.kind == "tool":
+            await avisar({"kind": "tool", "name": evento.data["name"], "arguments": {}})
+        elif evento.kind == "error":
+            await avisar({"kind": "error", "error": evento.data["error"]})
+    await avisar({"kind": "turn"})
+    return sessao
+
+
 def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
     """Qual motor usar, e o que falta quando nenhum dá.
 
@@ -266,6 +330,8 @@ def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
         app.state.secrets.get("DEEPGRAM_API_KEY") and app.state.secrets.get("CARTESIA_API_KEY")
     )
 
+    if pedido == "nativo":
+        return "nativo", None
     if pedido == "gemini":
         if tem_gemini:
             return "gemini", None
@@ -282,10 +348,14 @@ def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
         )
 
     preferido = app.state.settings.voice.live_engine
+    disponibilidade = {"nativo": True, "openrouter": tem_partes, "gemini": tem_gemini}
     for candidato, disponivel in (
-        (preferido, tem_partes if preferido == "openrouter" else tem_gemini),
+        (preferido, disponibilidade.get(preferido, False)),
         ("openrouter", tem_partes),
         ("gemini", tem_gemini),
+        # O nativo é o último porque a voz do sistema é mais dura — mas é o
+        # único que funciona sem chave nenhuma, então nunca falta.
+        ("nativo", True),
     ):
         if disponivel:
             return candidato, None
