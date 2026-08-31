@@ -103,6 +103,14 @@ class VoiceSession:
 
     # -------------------------------------------------------------- saída
 
+    async def responder(self, texto: str) -> None:
+        """Responde a um texto escrito, como se tivesse sido falado.
+
+        A página ao vivo deixa escrever quando não dá para falar; para o resto
+        da sessão não há diferença.
+        """
+        await self._respond(texto)
+
     async def _respond(self, texto: str) -> None:
         pendente = ""
         falou_algo = False

@@ -94,6 +94,16 @@ class VoiceSettings(BaseModel):
     tts_language: str = "pt"
     output_sample_rate: int = Field(default=24000, gt=0)
 
+    live_engine: Literal["openrouter", "gemini"] = "openrouter"
+    """Quem conduz a conversa ao vivo.
+
+    ``openrouter``: Deepgram ouve, o modelo do OpenRouter pensa, Cartesia fala.
+    São três peças, mas passam pelo motor de conversa da EVE — então rota,
+    ferramentas e memória são os mesmos do chat.
+
+    ``gemini``: um modelo só, que ouve e fala. Menos latência por não trocar de
+    mãos, e exige uma GOOGLE_API_KEY à parte."""
+
     live_model: str = "gemini-3.1-flash-live-preview"
     """Modelo da conversa ao vivo: um só, que ouve e fala, sem STT nem TTS no meio.
 

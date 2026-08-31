@@ -9,7 +9,7 @@ export default function App() {
   const [rascunho, setRascunho] = useState("");
   const [detalhes, setDetalhes] = useState(false);
   const [painel, setPainel] = useState(false);
-  const [aoVivo, setAoVivo] = useState(false);
+  const [pagina, setPagina] = useState<Pagina>("conversa");
   const fim = useRef<HTMLDivElement>(null);
   const campo = useRef<HTMLTextAreaElement>(null);
 
@@ -31,10 +31,21 @@ export default function App() {
     setRascunho("");
   };
 
-  if (aoVivo) return <LivePage onVoltar={() => setAoVivo(false)} />;
-
   return (
     <div className="app">
+      <Menu atual={pagina} onIr={setPagina} onPainel={() => setPainel(true)} />
+      {pagina === "aovivo" ? (
+        <LivePage />
+      ) : (
+        <Conversa />
+      )}
+      {painel && <Panel status={status} onClose={() => setPainel(false)} />}
+    </div>
+  );
+
+  function Conversa() {
+    return (
+      <>
       <header className="topbar">
         <div className="brand">
           <span className={`pulse ${connected ? "live" : "off"}`} />
@@ -55,12 +66,6 @@ export default function App() {
         </div>
         <button className="ghost" onClick={() => setDetalhes((v) => !v)}>
           {detalhes ? "menos" : "detalhes"}
-        </button>
-        <button className="ghost" onClick={() => setAoVivo(true)}>
-          ao vivo
-        </button>
-        <button className="ghost" onClick={() => setPainel(true)}>
-          painel
         </button>
         {turns.length > 0 && (
           <button className="ghost" onClick={reset}>
@@ -127,8 +132,45 @@ export default function App() {
           </button>
         </div>
       </div>
+      </>
+    );
+  }
+}
 
-      {painel && <Panel status={status} onClose={() => setPainel(false)} />}
-    </div>
+type Pagina = "conversa" | "aovivo";
+
+/** O menu fica à direita: a leitura é à esquerda, e navegar não disputa com ela. */
+function Menu({
+  atual,
+  onIr,
+  onPainel,
+}: {
+  atual: Pagina;
+  onIr: (p: Pagina) => void;
+  onPainel: () => void;
+}) {
+  const paginas: { id: Pagina; rotulo: string; icone: string }[] = [
+    { id: "conversa", rotulo: "conversa", icone: "✱" },
+    { id: "aovivo", rotulo: "ao vivo", icone: "◉" },
+  ];
+  return (
+    <nav className="menu">
+      {paginas.map((p) => (
+        <button
+          key={p.id}
+          className={`item ${atual === p.id ? "ativo" : ""}`}
+          onClick={() => onIr(p.id)}
+          title={p.rotulo}
+        >
+          <span className="icone">{p.icone}</span>
+          <span className="rotulo">{p.rotulo}</span>
+        </button>
+      ))}
+      <div className="separa" />
+      <button className="item" onClick={onPainel} title="painel">
+        <span className="icone">▤</span>
+        <span className="rotulo">painel</span>
+      </button>
+    </nav>
   );
 }

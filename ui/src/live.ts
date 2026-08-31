@@ -10,8 +10,19 @@
 import { PROCESSOR } from "./voice";
 
 export type LiveEvent =
-  | { kind: "ready"; model: string; voice: string; tools: string[] }
+  | {
+      kind: "ready";
+      engine: string;
+      model: string;
+      voice: string;
+      tools: string[];
+      incremental: boolean;
+      outputRate: number;
+    }
   | { kind: "partial"; text: string }
+  | { kind: "final"; text: string }
+  | { kind: "listening"; on: boolean }
+  | { kind: "speaking"; on: boolean }
   | { kind: "reply"; text: string }
   | { kind: "tool"; name: string; arguments: Record<string, unknown> }
   | { kind: "tool_result"; name: string; ok: boolean; error: string | null }
@@ -20,6 +31,8 @@ export type LiveEvent =
   | { kind: "turn" }
   | { kind: "error"; error: string; fatal?: boolean; hint?: string }
   | { kind: "closed" };
+
+export type Motor = "auto" | "openrouter" | "gemini";
 
 export class LiveClient {
   private socket: WebSocket | null = null;
@@ -32,9 +45,11 @@ export class LiveClient {
   private outputRate = 24000;
 
   private onEvent: (e: LiveEvent) => void;
+  private motor: Motor;
 
-  constructor(onEvent: (e: LiveEvent) => void) {
+  constructor(onEvent: (e: LiveEvent) => void, motor: Motor = "auto") {
     this.onEvent = onEvent;
+    this.motor = motor;
   }
 
   get active() {
@@ -45,7 +60,7 @@ export class LiveClient {
     if (this.socket) return;
 
     const protocolo = location.protocol === "https:" ? "wss:" : "ws:";
-    const socket = new WebSocket(`${protocolo}//${location.host}/ws/live`);
+    const socket = new WebSocket(`${protocolo}//${location.host}/ws/live?motor=${this.motor}`);
     socket.binaryType = "arraybuffer";
     this.socket = socket;
     socket.onmessage = (e) => this.receber(e);
@@ -90,7 +105,7 @@ export class LiveClient {
       return;
     }
     const frame = JSON.parse(evento.data as string) as LiveEvent;
-    if (frame.kind === "ready") this.outputRate = 24000;
+    if (frame.kind === "ready") this.outputRate = frame.outputRate || 24000;
     if (frame.kind === "interrupted") this.silenciar();
     this.onEvent(frame);
   }

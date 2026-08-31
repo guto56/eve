@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 
 from eve.ai.base import from_wire_name, to_wire_name
 from eve.events import EventType
@@ -55,7 +55,10 @@ precisar de confirmação, ela aparece na tela; diga que está aguardando."""
 
 
 @router.websocket("/ws/live")
-async def live_endpoint(websocket: WebSocket) -> None:
+async def live_endpoint(
+    websocket: WebSocket,
+    motor: str = Query(default="auto", pattern="^(auto|openrouter|gemini)$"),
+) -> None:
     await websocket.accept()
     app = websocket.app
     envio = asyncio.Lock()
@@ -68,21 +71,18 @@ async def live_endpoint(websocket: WebSocket) -> None:
         async with envio:
             await websocket.send_bytes(pcm)
 
-    chave = app.state.secrets.get("GOOGLE_API_KEY")
-    if not chave:
-        await avisar(
-            {
-                "kind": "error",
-                "fatal": True,
-                "error": "GOOGLE_API_KEY não configurada",
-                "hint": "pegue em aistudio.google.com/apikey e grave com: eve key set "
-                "GOOGLE_API_KEY",
-            }
-        )
+    escolhido, falta = _motor(app, motor)
+    if falta:
+        await avisar({"kind": "error", "fatal": True, "error": falta[0], "hint": falta[1]})
         await websocket.close()
         return
 
+    if escolhido == "openrouter":
+        await _conversa_em_partes(websocket, app, avisar, falar)
+        return
+
     settings = app.state.settings
+    chave = app.state.secrets.get("GOOGLE_API_KEY") or ""
     try:
         sessao = SessaoLive(
             chave,
@@ -252,3 +252,132 @@ async def _instrucoes(app: Any) -> str:
         log.info("live.sem_memoria", error=str(exc)[:120])
         contexto = ""
     return f"{INSTRUCOES}\n\n{contexto}" if contexto else INSTRUCOES
+
+
+def _motor(app: Any, pedido: str) -> tuple[str, tuple[str, str] | None]:
+    """Qual motor usar, e o que falta quando nenhum dá.
+
+    O pedido explícito manda; ``auto`` prefere o que a máquina consegue rodar
+    agora. Dizer "escolha automática" e depois falhar por falta de chave seria
+    escolher errado e culpar o usuário.
+    """
+    tem_gemini = bool(app.state.secrets.get("GOOGLE_API_KEY"))
+    tem_partes = bool(
+        app.state.secrets.get("DEEPGRAM_API_KEY") and app.state.secrets.get("CARTESIA_API_KEY")
+    )
+
+    if pedido == "gemini":
+        if tem_gemini:
+            return "gemini", None
+        return "gemini", (
+            "GOOGLE_API_KEY não configurada",
+            "pegue em aistudio.google.com/apikey e grave com: eve key set GOOGLE_API_KEY",
+        )
+    if pedido == "openrouter":
+        if tem_partes:
+            return "openrouter", None
+        return "openrouter", (
+            "falta DEEPGRAM_API_KEY ou CARTESIA_API_KEY",
+            "grave com: eve key set DEEPGRAM_API_KEY",
+        )
+
+    preferido = app.state.settings.voice.live_engine
+    for candidato, disponivel in (
+        (preferido, tem_partes if preferido == "openrouter" else tem_gemini),
+        ("openrouter", tem_partes),
+        ("gemini", tem_gemini),
+    ):
+        if disponivel:
+            return candidato, None
+    return "openrouter", (
+        "nenhum motor de voz configurado",
+        "grave DEEPGRAM_API_KEY e CARTESIA_API_KEY, ou GOOGLE_API_KEY",
+    )
+
+
+#: O vocabulário da voz em partes, traduzido para o desta página.
+DE_VOZ = {
+    "listening": "listening",
+    "partial": "partial",
+    "final": "final",
+    "reply": "reply",
+    "tool": "tool",
+    "speaking": "speaking",
+    "interrupted": "interrupted",
+    "reply_done": "turn",
+    "error": "error",
+}
+
+
+async def _conversa_em_partes(websocket: WebSocket, app: Any, avisar: Any, falar: Any) -> None:
+    """Deepgram ouve, o modelo do OpenRouter pensa, Cartesia fala.
+
+    É a mesma sessão de voz do chat, com outro vocabulário na saída: reescrever
+    o pipeline só para trocar o nome dos eventos seria manter duas versões da
+    mesma coisa, e uma delas envelheceria.
+    """
+    from eve.daemon.routes.voice import build_stt, build_tts
+    from eve.voice.session import VoiceSession
+
+    voz = app.state.settings.voice
+    try:
+        stt, tts = build_stt(app), build_tts(app)
+    except ValueError as exc:
+        await avisar({"kind": "error", "fatal": True, "error": str(exc)})
+        await websocket.close()
+        return
+
+    async def traduzir(payload: dict[str, Any]) -> None:
+        tipo = DE_VOZ.get(str(payload.get("type")))
+        if tipo is None:
+            return
+        await avisar({**{k: v for k, v in payload.items() if k != "type"}, "kind": tipo})
+
+    await avisar(
+        {
+            "kind": "ready",
+            "engine": "openrouter",
+            "inputRate": voz.input_sample_rate,
+            "outputRate": voz.output_sample_rate,
+            "model": app.state.providers.model_for("external"),
+            "voice": "Cartesia",
+            # A transcrição do Deepgram vem inteira a cada parcial, não em
+            # pedaços — a tela substitui a linha em vez de emendar.
+            "incremental": False,
+            "tools": ["a conversa inteira da EVE"],
+        }
+    )
+
+    async with stt:
+        sessao = VoiceSession(app.state.chat, stt, tts, voz, traduzir, falar)
+        aquecimento = asyncio.create_task(tts.warm_up())
+        escuta = asyncio.create_task(sessao.listen())
+        try:
+            while True:
+                mensagem = await websocket.receive()
+                if mensagem["type"] == "websocket.disconnect":
+                    break
+                if (audio := mensagem.get("bytes")) is not None:
+                    await sessao.feed(audio)
+                elif (texto := mensagem.get("text")) is not None:
+                    await _texto_para_a_conversa(sessao, texto)
+        except (WebSocketDisconnect, RuntimeError) as exc:
+            log.info("live.encerrada", motivo=str(exc)[:120])
+        finally:
+            escuta.cancel()
+            aquecimento.cancel()
+            await asyncio.gather(escuta, aquecimento, return_exceptions=True)
+            await sessao.aclose()
+            await tts.aclose()
+
+
+async def _texto_para_a_conversa(sessao: Any, bruto: str) -> None:
+    """Escrever na página vale como ter falado."""
+    import json
+
+    try:
+        dados = json.loads(bruto)
+    except json.JSONDecodeError:
+        return
+    if dados.get("op") == "texto" and (texto := str(dados.get("text", "")).strip()):
+        await sessao.responder(texto)

@@ -618,3 +618,60 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .app { padding: 0 14px; }
   .bubble { max-width: 88%; }
 }
+
+/* ---------------------------------------------------------------- menu */
+/* À direita, e estreito: ele acompanha a leitura sem disputar com ela.
+   Só abre os rótulos quando há largura sobrando. */
+.menu {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 68px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 7px;
+  border-left: 1px solid var(--line-soft);
+  background: var(--surface);
+  z-index: 20;
+}
+.menu .item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 2px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-faint);
+  font-size: 9.5px;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: color .12s, border-color .12s, background .12s;
+}
+.menu .item:hover { color: var(--text-dim); background: var(--surface-2, rgba(255,255,255,.03)); }
+.menu .item.ativo {
+  color: var(--text);
+  border-color: var(--accent-dim);
+}
+.menu .icone { font-size: 15px; line-height: 1; }
+.menu .rotulo { white-space: nowrap; }
+.menu .separa {
+  margin: 6px 4px;
+  border-top: 1px solid var(--line-soft);
+}
+
+/* O menu ocupa a direita; o conteúdo recua para não ficar embaixo dele. */
+.app > .topbar,
+.app > .stream,
+.app > .composer { padding-right: 78px; }
+
+@media (max-width: 560px) {
+  .menu { width: 46px; padding: 10px 5px; }
+  .menu .rotulo { display: none; }
+  .app > .topbar,
+  .app > .stream,
+  .app > .composer { padding-right: 52px; }
+}

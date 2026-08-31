@@ -7,18 +7,23 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { LiveClient, type LiveEvent } from "./live";
+import { LiveClient, type LiveEvent, type Motor } from "./live";
 
 type Fala = { de: "voce" | "eve"; texto: string };
 type Acao = { nome: string; ok: boolean | null; erro: string | null };
 
-export function LivePage({ onVoltar }: { onVoltar: () => void }) {
+export function LivePage({ motor = "auto" }: { motor?: Motor }) {
   const [ligada, setLigada] = useState(false);
   const [abrindo, setAbrindo] = useState(false);
   const [falas, setFalas] = useState<Fala[]>([]);
   const [acoes, setAcoes] = useState<Acao[]>([]);
   const [erro, setErro] = useState<{ texto: string; dica?: string } | null>(null);
-  const [info, setInfo] = useState<{ model: string; voice: string } | null>(null);
+  const [info, setInfo] = useState<{ engine: string; model: string; voice: string } | null>(null);
+  const [ouvindo, setOuvindo] = useState(false);
+  const [falando, setFalando] = useState(false);
+  // Deepgram manda a frase inteira a cada parcial; o Gemini manda pedaços.
+  // Quem emenda e quem substitui depende disso.
+  const incremental = useRef(true);
   const [rascunho, setRascunho] = useState("");
   const cliente = useRef<LiveClient | null>(null);
   const fim = useRef<HTMLDivElement>(null);
@@ -30,14 +35,26 @@ export function LivePage({ onVoltar }: { onVoltar: () => void }) {
   const receber = useCallback((e: LiveEvent) => {
     switch (e.kind) {
       case "ready":
-        setInfo({ model: e.model, voice: e.voice });
+        setInfo({ engine: e.engine ?? "gemini", model: e.model, voice: e.voice });
+        incremental.current = e.incremental !== false;
         setLigada(true);
         setAbrindo(false);
+        break;
+      case "listening":
+        setOuvindo(e.on);
+        break;
+      case "speaking":
+        setFalando(e.on);
+        break;
+      case "final":
+        setFalas((f) => trocar(f, "voce", e.text));
         break;
       // A transcrição chega em pedaços: emenda no que já está lá, em vez de
       // empilhar uma linha por sílaba.
       case "partial":
-        setFalas((f) => emendar(f, "voce", e.text));
+        setFalas((f) =>
+          incremental.current ? emendar(f, "voce", e.text) : trocar(f, "voce", e.text),
+        );
         break;
       case "reply":
         setFalas((f) => emendar(f, "eve", e.text));
@@ -76,7 +93,7 @@ export function LivePage({ onVoltar }: { onVoltar: () => void }) {
     }
     setErro(null);
     setAbrindo(true);
-    const c = new LiveClient(receber);
+    const c = new LiveClient(receber, motor);
     cliente.current = c;
     try {
       await c.start();
@@ -98,7 +115,7 @@ export function LivePage({ onVoltar }: { onVoltar: () => void }) {
   };
 
   return (
-    <div className="app live">
+    <>
       <header className="topbar">
         <div className="brand">
           <span className={`pulse ${ligada ? "live" : "off"}`} />
@@ -107,13 +124,11 @@ export function LivePage({ onVoltar }: { onVoltar: () => void }) {
         <div className="topbar-meta">
           {info && (
             <span>
-              {info.model} · voz {info.voice}
+              {info.engine} · {info.model} · voz {info.voice}
             </span>
           )}
+          {ligada && <span>{falando ? "falando" : ouvindo ? "ouvindo" : "pronta"}</span>}
         </div>
-        <button className="ghost" onClick={onVoltar}>
-          voltar
-        </button>
       </header>
 
       <main className="stream">
@@ -121,8 +136,10 @@ export function LivePage({ onVoltar }: { onVoltar: () => void }) {
           <div className="empty">
             <h1>Conversa ao vivo</h1>
             <p>
-              Um modelo só ouve e responde, sem transcrever no meio. Ele enxerga sua memória e pode
-              criar, corrigir e apagar o que você pedir.
+              {info?.engine === "gemini"
+                ? "Um modelo só ouve e responde, sem transcrever no meio."
+                : "Deepgram ouve, o modelo pensa, Cartesia fala."}{" "}
+              Ela enxerga sua memória e pode criar, corrigir e apagar o que você pedir.
             </p>
             <p className="dim">Aperte o microfone e fale. Pode interromper a EVE no meio.</p>
           </div>
@@ -176,8 +193,15 @@ export function LivePage({ onVoltar }: { onVoltar: () => void }) {
           </button>
         </div>
       </div>
-    </div>
+    </>
   );
+}
+
+/** Substitui a última fala de quem está falando — o transcritor manda a frase inteira. */
+function trocar(falas: Fala[], de: Fala["de"], texto: string): Fala[] {
+  const ultima = falas[falas.length - 1];
+  if (ultima && ultima.de === de) return [...falas.slice(0, -1), { de, texto }];
+  return [...falas, { de, texto }];
 }
 
 /** Junta o pedaço novo à última fala de quem está falando. */

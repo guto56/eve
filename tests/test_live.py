@@ -13,17 +13,47 @@ import json
 from fastapi.testclient import TestClient
 
 from eve.daemon.app import create_app
-from eve.daemon.routes.live import _declaracoes, _podar
-from eve.voice.live import TAXA_ENTRADA, TAXA_SAIDA, SessaoLive, _traduzir
+from eve.daemon.routes.live import _declaracoes, _motor, _podar
+from eve.voice.live import TAXA_ENTRADA, TAXA_SAIDA, SessaoLive, _traduzir, explicar
 
 
-def test_sem_chave_a_pagina_diz_o_que_falta() -> None:
+def test_sem_chave_nenhuma_a_pagina_diz_o_que_falta() -> None:
     """Erro sem instrução é erro que o usuário não resolve."""
     with TestClient(create_app()) as client, client.websocket_connect("/ws/live") as ws:
         aviso = ws.receive_json()
     assert aviso["fatal"] is True
-    assert "GOOGLE_API_KEY" in aviso["error"]
-    assert "eve key set" in aviso["hint"]
+    assert "nenhum motor" in aviso["error"]
+    assert "DEEPGRAM_API_KEY" in aviso["hint"]
+
+
+def test_motor_escolhido_segue_o_que_a_maquina_tem() -> None:
+    """Dizer "automático" e falhar por falta de chave é escolher errado e
+    culpar o usuário."""
+    app = create_app()
+
+    app.state.secrets.set("DEEPGRAM_API_KEY", "d")
+    app.state.secrets.set("CARTESIA_API_KEY", "c")
+    assert _motor(app, "auto") == ("openrouter", None)
+    assert _motor(app, "openrouter") == ("openrouter", None)
+
+    # Pedido explícito sem a chave devolve o que falta, não outro motor.
+    escolhido, falta = _motor(app, "gemini")
+    assert escolhido == "gemini"
+    assert falta is not None and "GOOGLE_API_KEY" in falta[0]
+
+    app.state.secrets.set("GOOGLE_API_KEY", "g")
+    assert _motor(app, "gemini") == ("gemini", None)
+    # Com os dois, vale o preferido da configuração.
+    assert _motor(app, "auto")[0] == app.state.settings.voice.live_engine
+
+
+def test_erro_do_google_vira_frase_que_se_entende() -> None:
+    """ "received 1011 (internal error)" não diz a ninguém o que fazer."""
+    assert explicar("Your prepayment credits are depleted. Please go to") == (
+        "a conta do Google AI Studio está sem créditos"
+    )
+    assert explicar("API key not valid") == "a GOOGLE_API_KEY não é válida"
+    assert explicar("algo que não conhecemos") == "algo que não conhecemos"
 
 
 def test_abertura_pede_o_que_a_conversa_precisa() -> None:

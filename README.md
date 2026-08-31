@@ -27,22 +27,21 @@ eve setup               # refazer as escolhas quando quiser
 
 ## Conversa ao vivo
 
-Uma página à parte, no botão **ao vivo**: um modelo só ouve e responde, sem
-transcrever no meio. É o Gemini Live (`gemini-3.1-flash-live-preview`), com o
-áudio indo e voltando pelo mesmo WebSocket.
+Uma página própria, no menu à direita. Dois motores, escolhidos por
+`ai.live_engine` no `config.toml` ou pelo parâmetro `?motor=`:
 
-As ferramentas não vão para o Google executar — ele pede, e quem executa é o
-Tool Bus daqui, com permissão e auditoria. É por isso que uma conversa falada
-pode **ver, criar, corrigir e apagar** memória sem virar um caminho paralelo
-sem regra.
+| Motor | Como funciona | Precisa de |
+| --- | --- | --- |
+| `openrouter` (padrão) | Deepgram ouve, o modelo pensa, Cartesia fala — passando pelo motor de conversa da EVE, com rota, ferramentas e memória iguais aos do chat | `DEEPGRAM_API_KEY`, `CARTESIA_API_KEY` |
+| `gemini` | um modelo só, que ouve e fala; menos latência por não trocar de mãos | `GOOGLE_API_KEY` |
 
-Precisa de uma chave do Google AI Studio, que é separada do OpenRouter:
+No caminho do Gemini as ferramentas não vão para o Google executar: ele pede, e
+quem executa é o Tool Bus daqui, com permissão e auditoria. É por isso que uma
+conversa falada pode **ver, criar, corrigir e apagar** memória sem virar um
+caminho paralelo sem regra.
 
-```bash
-eve key set GOOGLE_API_KEY     # aistudio.google.com/apikey
-```
-
-Sem ela a página abre, explica o que falta e não pede o microfone.
+`auto` prefere o motor que a máquina consegue rodar agora; faltando tudo, a
+página diz o que falta e não pede o microfone.
 
 ## Onde a EVE pensa
 

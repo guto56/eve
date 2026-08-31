@@ -151,7 +151,7 @@ class SessaoLive:
                 for evento in _traduzir(bruto):
                     yield evento
         except websockets.exceptions.ConnectionClosed as exc:
-            yield {"tipo": "fechada", "motivo": _curto(exc)}
+            yield {"tipo": "fechada", "motivo": explicar(_curto(exc))}
         except Exception as exc:
             yield {"tipo": "erro", "erro": _curto(exc)}
 
@@ -217,6 +217,27 @@ def _audio(turno: Any) -> list[bytes]:
             except (ValueError, TypeError):
                 log.warning("live.audio_invalido")
     return pedacos
+
+
+#: Falhas que o Google devolve embrulhadas num fechamento de socket. A
+#: mensagem crua chega truncada e em inglês; sem traduzir, o usuário lê
+#: "received 1011 (internal error)" e não sabe o que fazer.
+CONHECIDAS: tuple[tuple[str, str], ...] = (
+    ("credits are depleted", "a conta do Google AI Studio está sem créditos"),
+    ("API key not valid", "a GOOGLE_API_KEY não é válida"),
+    ("API_KEY_INVALID", "a GOOGLE_API_KEY não é válida"),
+    ("quota", "a cota do Google AI Studio acabou"),
+    ("PERMISSION_DENIED", "a chave não tem permissão para o Live API"),
+    ("was not found", "o modelo configurado não existe para esta chave"),
+)
+
+
+def explicar(motivo: str) -> str:
+    """Traduz o que dá para traduzir; devolve o resto como veio."""
+    for marca, claro in CONHECIDAS:
+        if marca.lower() in motivo.lower():
+            return claro
+    return motivo
 
 
 def _curto(exc: BaseException) -> str:
