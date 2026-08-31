@@ -31,6 +31,29 @@ log = get_logger(__name__)
 #: Fim de frase: é aqui que dá para mandar um trecho falar sem soar cortado.
 FIM_DE_FRASE = re.compile(r"[.!?…]+[\s\"')\]]*$|[:;]\s*$")
 
+#: Marcação que o modelo escreve sem pensar e o sintetizador lê em voz alta.
+#: "**Ilha de Páscoa**" vira "asterisco asterisco Ilha de Páscoa" — o texto
+#: está certo para os olhos e errado para o ouvido.
+MARCACAO = (
+    (re.compile(r"```.*?```", re.S), " "),
+    (re.compile(r"`([^`]*)`"), r"\1"),
+    (re.compile(r"\*\*([^*]+)\*\*"), r"\1"),
+    (re.compile(r"(?<!\w)\*([^*\n]+)\*(?!\w)"), r"\1"),
+    (re.compile(r"(?<!\w)_([^_\n]+)_(?!\w)"), r"\1"),
+    (re.compile(r"^#{1,6}\s+", re.M), ""),
+    (re.compile(r"^\s*[-*+]\s+", re.M), ""),
+    (re.compile(r"\[([^\]]+)\]\([^)]*\)"), r"\1"),
+    (re.compile(r"[ \t]{2,}"), " "),
+)
+
+
+def so_fala(texto: str) -> str:
+    """Tira a marcação do texto antes de mandá-lo falar."""
+    for padrao, troca in MARCACAO:
+        texto = padrao.sub(troca, texto)
+    return texto.strip()
+
+
 MIN_PARA_FALAR = 40
 """Trecho curto demais soa picotado; longo demais atrasa o começo da fala."""
 
@@ -138,6 +161,9 @@ class VoiceSession:
             await self.send_json({"type": "reply_done"})
 
     async def _speak(self, texto: str) -> None:
+        texto = so_fala(texto)
+        if not texto:
+            return
         self.state.speaking = True
         await self.send_json({"type": "speaking", "on": True})
         await self.engine.bus.emit(EventType.VOICE_SPEAKING, source="voice", on=True)

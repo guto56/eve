@@ -56,7 +56,19 @@ class AISettings(BaseModel):
 
     external_provider: Literal["openrouter", "none"] = "openrouter"
     external_base_url: str = "https://openrouter.ai/api/v1"
-    external_model: str = "google/gemini-3.1-flash-lite"
+    external_model: str = "google/gemini-3.5-flash-lite"
+    """Resposta do dia a dia. Medido nesta conta, mediana do primeiro token:
+    3.5-flash-lite 1026 ms contra 1504 ms do 3.1 — 32% mais rápido, e é onde a
+    inteligência ainda importa."""
+
+    external_fast_model: str = "mistralai/ministral-8b-2512"
+    """Classificar intenção e transformar resultado em frase.
+
+    Roda a cada mensagem, então é aqui que a latência dói mais. Medido: 484 ms
+    por classificação contra 1290 ms do gemini-3.1-flash-lite, com a mesma
+    precisão (4/6) e a um décimo do preço de saída. Um modelo pequeno basta
+    para escolher entre cinco rótulos."""
+
     external_heavy_model: str = "anthropic/claude-sonnet-5"
 
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)

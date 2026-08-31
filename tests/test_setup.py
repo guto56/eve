@@ -39,9 +39,14 @@ def test_modo_externo_manda_todo_papel_para_a_nuvem() -> None:
     manager = _manager("external")
     for papel in ("local", "fast", "external", "heavy"):
         assert type(manager.provider_for(papel)).__name__ == "OpenRouterProvider"
-    # O papel "fast" não pode cair no modelo caro só porque não há local.
-    assert manager.model_for("fast") == manager.settings.ai.external_model
-    assert manager.model_for("heavy") == manager.settings.ai.external_heavy_model
+    ai = manager.settings.ai
+    # Classificar e frasear rodam a cada mensagem: sem modelo local, o papel
+    # rápido vai para o modelo pequeno, não para o de responder nem para o caro.
+    assert manager.model_for("fast") == ai.external_fast_model
+    assert manager.model_for("local") == ai.external_fast_model
+    assert manager.model_for("external") == ai.external_model
+    assert manager.model_for("heavy") == ai.external_heavy_model
+    assert ai.external_fast_model not in (ai.external_model, ai.external_heavy_model)
 
 
 def test_modo_hibrido_continua_usando_o_local() -> None:

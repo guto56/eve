@@ -80,3 +80,22 @@ def test_cabecalho_wav() -> None:
     assert header[:4] == b"RIFF"
     assert header[8:12] == b"WAVE"
     assert len(header) == 44
+
+
+def test_marcacao_nao_vai_para_o_sintetizador() -> None:
+    """ "**Ilha de Páscoa**" vira "asterisco asterisco Ilha de Páscoa" na voz.
+
+    O texto está certo para os olhos e errado para o ouvido, e o modelo escreve
+    markdown sem pensar."""
+    from eve.voice.session import so_fala
+
+    assert so_fala("O oceano tem a **Ilha de Páscoa**.") == "O oceano tem a Ilha de Páscoa."
+    assert so_fala("Use `eve start` para começar.") == "Use eve start para começar."
+    assert so_fala("Isso é *importante* mesmo.") == "Isso é importante mesmo."
+    assert so_fala("Veja [a documentação](https://x.com) depois.") == (
+        "Veja a documentação depois."
+    )
+    assert so_fala("# Título") == "Título"
+    # Texto sem marcação passa intacto — inclusive asterisco no meio da palavra.
+    assert so_fala("nada muda aqui") == "nada muda aqui"
+    assert so_fala("2 * 3 = 6") == "2 * 3 = 6"

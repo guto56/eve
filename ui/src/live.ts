@@ -43,6 +43,9 @@ export class LiveClient {
   private proximoInicio = 0;
   private tocando: AudioBufferSourceNode[] = [];
   private outputRate = 24000;
+  private analiseSaida: AnalyserNode | null = null;
+  private analiseEntrada: AnalyserNode | null = null;
+  private amostra = new Uint8Array(64);
 
   private onEvent: (e: LiveEvent) => void;
   private motor: Motor;
@@ -76,10 +79,21 @@ export class LiveClient {
     });
 
     // O microfone só é pedido depois que o servidor aceitou: sem chave, a
-    // página não tem por que acender a luz da câmera do usuário.
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
-    });
+    // página não tem por que acender a luz do microfone do usuário.
+    //
+    // E negá-lo não encerra a sessão: dá para conversar escrevendo, e derrubar
+    // tudo porque o microfone falhou seria tirar o que ainda funcionava.
+    try {
+      this.stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, channelCount: 1 },
+      });
+    } catch {
+      this.onEvent({
+        kind: "error",
+        error: "sem acesso ao microfone — dá para conversar escrevendo",
+      });
+      return;
+    }
 
     const capture = new AudioContext({ sampleRate: 16000 });
     this.capture = capture;
@@ -90,7 +104,13 @@ export class LiveClient {
     node.port.onmessage = (e) => {
       if (socket.readyState === WebSocket.OPEN) socket.send(e.data as ArrayBuffer);
     };
-    capture.createMediaStreamSource(this.stream).connect(node);
+    const fonte = capture.createMediaStreamSource(this.stream);
+    fonte.connect(node);
+    // Uma derivação só para medir: é o que deixa a esfera reagir à sua voz.
+    const analise = capture.createAnalyser();
+    analise.fftSize = 128;
+    fonte.connect(analise);
+    this.analiseEntrada = analise;
     node.connect(capture.destination);
     this.node = node;
   }
@@ -120,9 +140,15 @@ export class LiveClient {
     const canal = audio.getChannelData(0);
     for (let i = 0; i < pcm.length; i++) canal[i] = pcm[i] / 0x8000;
 
+    if (!this.analiseSaida) {
+      const analise = contexto.createAnalyser();
+      analise.fftSize = 128;
+      analise.connect(contexto.destination);
+      this.analiseSaida = analise;
+    }
     const fonte = contexto.createBufferSource();
     fonte.buffer = audio;
-    fonte.connect(contexto.destination);
+    fonte.connect(this.analiseSaida);
 
     // Emenda no fim do pedaço anterior; se já passou, toca agora.
     const inicio = Math.max(this.proximoInicio, contexto.currentTime);
@@ -148,6 +174,21 @@ export class LiveClient {
     this.proximoInicio = 0;
   }
 
+  /** Quanto som está passando agora, de 0 a 1. */
+  nivel(saida: boolean): number {
+    const analise = saida ? this.analiseSaida : this.analiseEntrada;
+    if (!analise) return 0;
+    analise.getByteTimeDomainData(this.amostra);
+    let soma = 0;
+    for (let i = 0; i < this.amostra.length; i++) {
+      const v = (this.amostra[i] - 128) / 128;
+      soma += v * v;
+    }
+    // Raiz quadrática média, esticada: a fala normal fica longe do topo da
+    // escala, e sem esticar a esfera mal se mexeria.
+    return Math.min(1, Math.sqrt(soma / this.amostra.length) * 3.2);
+  }
+
   async stop() {
     this.silenciar();
     this.socket?.close();
@@ -164,6 +205,8 @@ export class LiveClient {
     this.capture = null;
     this.playback = null;
     this.socket = null;
+    this.analiseSaida = null;
+    this.analiseEntrada = null;
     this.proximoInicio = 0;
   }
 }

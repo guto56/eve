@@ -40,10 +40,18 @@ def test_external_disabled_by_configuration(
 
 
 def test_model_for_each_role(manager: ProviderManager) -> None:
-    assert manager.model_for("local") == "qwen3.5:2b"
-    assert manager.model_for("fast") == "qwen3.5:0.8b"
-    assert manager.model_for("external") == "google/gemini-3.1-flash-lite"
-    assert manager.model_for("heavy") == "anthropic/claude-sonnet-5"
+    """Cada papel puxa o modelo da configuração dele.
+
+    Comparado com a configuração e não com nomes fixos: os modelos mudam
+    quando aparece um mais rápido, e um teste que decora nomes só avisa que
+    alguém trocou — não que trocou errado."""
+    ai = manager.settings.ai
+    assert manager.model_for("local") == ai.local_model
+    assert manager.model_for("fast") == ai.local_fast_model
+    assert manager.model_for("external") == ai.external_model
+    assert manager.model_for("heavy") == ai.external_heavy_model
+    # O rápido tem de ser mesmo outro, senão o papel não existe.
+    assert ai.local_fast_model != ai.local_model
 
 
 def test_provider_for_roles(manager: ProviderManager, secret_store: SecretStore) -> None:

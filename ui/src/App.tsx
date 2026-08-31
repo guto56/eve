@@ -32,7 +32,7 @@ export default function App() {
   };
 
   return (
-    <div className="app">
+    <div className={`app ${pagina === "aovivo" ? "noite" : ""}`}>
       <Menu atual={pagina} onIr={setPagina} onPainel={() => setPainel(true)} />
       {pagina === "aovivo" ? (
         <LivePage />

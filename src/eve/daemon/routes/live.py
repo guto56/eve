@@ -327,6 +327,29 @@ async def _conversa_em_partes(websocket: WebSocket, app: Any, avisar: Any, falar
         await websocket.close()
         return
 
+    # Conectar ao Deepgram custa uns 700 ms. Eles eram gastos com o socket do
+    # navegador parado — nada era lido enquanto isso, e quem clicasse e já
+    # falasse perdia o começo da frase. Agora as três coisas andam juntas: a
+    # conexão sobe, a página acende, e o que o microfone mandar espera na fila.
+    conectando = asyncio.create_task(stt.__aenter__())
+    aquecendo = asyncio.create_task(tts.warm_up())
+
+    recebidos: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+    async def ler_navegador() -> None:
+        try:
+            while True:
+                mensagem = await websocket.receive()
+                if mensagem["type"] == "websocket.disconnect":
+                    break
+                await recebidos.put(mensagem)
+        except (WebSocketDisconnect, RuntimeError):
+            pass
+        finally:
+            await recebidos.put(None)
+
+    leitor = asyncio.create_task(ler_navegador())
+
     async def traduzir(payload: dict[str, Any]) -> None:
         tipo = DE_VOZ.get(str(payload.get("type")))
         if tipo is None:
@@ -348,27 +371,34 @@ async def _conversa_em_partes(websocket: WebSocket, app: Any, avisar: Any, falar
         }
     )
 
-    async with stt:
-        sessao = VoiceSession(app.state.chat, stt, tts, voz, traduzir, falar)
-        aquecimento = asyncio.create_task(tts.warm_up())
-        escuta = asyncio.create_task(sessao.listen())
-        try:
-            while True:
-                mensagem = await websocket.receive()
-                if mensagem["type"] == "websocket.disconnect":
-                    break
-                if (audio := mensagem.get("bytes")) is not None:
-                    await sessao.feed(audio)
-                elif (texto := mensagem.get("text")) is not None:
-                    await _texto_para_a_conversa(sessao, texto)
-        except (WebSocketDisconnect, RuntimeError) as exc:
-            log.info("live.encerrada", motivo=str(exc)[:120])
-        finally:
-            escuta.cancel()
-            aquecimento.cancel()
-            await asyncio.gather(escuta, aquecimento, return_exceptions=True)
-            await sessao.aclose()
-            await tts.aclose()
+    try:
+        await conectando
+    except Exception as exc:
+        await avisar({"kind": "error", "fatal": True, "error": _resumo_stt(exc)})
+        leitor.cancel()
+        return
+
+    sessao = VoiceSession(app.state.chat, stt, tts, voz, traduzir, falar)
+    escuta = asyncio.create_task(sessao.listen())
+    try:
+        while (mensagem := await recebidos.get()) is not None:
+            if (audio := mensagem.get("bytes")) is not None:
+                await sessao.feed(audio)
+            elif (texto := mensagem.get("text")) is not None:
+                await _texto_para_a_conversa(sessao, texto)
+    except (WebSocketDisconnect, RuntimeError) as exc:
+        log.info("live.encerrada", motivo=str(exc)[:120])
+    finally:
+        for tarefa in (leitor, escuta, aquecendo):
+            tarefa.cancel()
+        await asyncio.gather(leitor, escuta, aquecendo, return_exceptions=True)
+        await sessao.aclose()
+        await tts.aclose()
+        await stt.__aexit__(None, None, None)
+
+
+def _resumo_stt(exc: BaseException) -> str:
+    return f"não consegui abrir o Deepgram: {str(exc)[:120] or type(exc).__name__}"
 
 
 async def _texto_para_a_conversa(sessao: Any, bruto: str) -> None:

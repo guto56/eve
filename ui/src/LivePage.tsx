@@ -7,6 +7,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Esfera, type Estado } from "./Esfera";
 import { LiveClient, type LiveEvent, type Motor } from "./live";
 
 type Fala = { de: "voce" | "eve"; texto: string };
@@ -25,8 +26,36 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
   // Quem emenda e quem substitui depende disso.
   const incremental = useRef(true);
   const [rascunho, setRascunho] = useState("");
+  const [pensando, setPensando] = useState(false);
+  const [nivel, setNivel] = useState(0);
   const cliente = useRef<LiveClient | null>(null);
   const fim = useRef<HTMLDivElement>(null);
+
+  const estado: Estado = !ligada
+    ? "desligada"
+    : falando
+      ? "falando"
+      : pensando
+        ? "pensando"
+        : ouvindo
+          ? "ouvindo"
+          : "parada";
+
+  // O nível vem do áudio, não de um temporizador: quando ela fala, a esfera
+  // pulsa com a voz dela; quando você fala, com a sua.
+  useEffect(() => {
+    if (!ligada) {
+      setNivel(0);
+      return;
+    }
+    let id = 0;
+    const ler = () => {
+      setNivel(cliente.current?.nivel(falando) ?? 0);
+      id = requestAnimationFrame(ler);
+    };
+    id = requestAnimationFrame(ler);
+    return () => cancelAnimationFrame(id);
+  }, [ligada, falando]);
 
   useEffect(() => {
     fim.current?.scrollIntoView({ behavior: "smooth", block: "end" });
@@ -48,6 +77,7 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
         break;
       case "final":
         setFalas((f) => trocar(f, "voce", e.text));
+        setPensando(true);
         break;
       // A transcrição chega em pedaços: emenda no que já está lá, em vez de
       // empilhar uma linha por sílaba.
@@ -57,6 +87,7 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
         );
         break;
       case "reply":
+        setPensando(false);
         setFalas((f) => emendar(f, "eve", e.text));
         break;
       case "tool":
@@ -68,7 +99,7 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
         );
         break;
       case "turn":
-        setFalas((f) => f.map((x) => ({ ...x, fechada: true }) as Fala));
+        setPensando(false);
         break;
       case "error":
         setErro({ texto: e.error, dica: e.hint });
@@ -111,6 +142,7 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
     if (!texto || !ligada) return;
     cliente.current?.enviarTexto(texto);
     setFalas((f) => [...f, { de: "voce", texto }]);
+    setPensando(true);
     setRascunho("");
   };
 
@@ -131,8 +163,22 @@ export function LivePage({ motor = "auto" }: { motor?: Motor }) {
         </div>
       </header>
 
-      <main className="stream">
-        {falas.length === 0 && (
+      <main className="stream palco">
+        <div className="orbe">
+          <Esfera estado={estado} nivel={nivel} />
+          <div className="legenda">
+            {!ligada
+              ? "toque para começar"
+              : falando
+                ? "falando"
+                : pensando
+                  ? "pensando"
+                  : ouvindo
+                    ? "ouvindo"
+                    : "pode falar"}
+          </div>
+        </div>
+        {falas.length === 0 && !ligada && (
           <div className="empty">
             <h1>Conversa ao vivo</h1>
             <p>

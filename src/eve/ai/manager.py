@@ -74,9 +74,15 @@ class ProviderManager:
     def model_for(self, role: Role) -> str:
         ai = self.settings.ai
         if self.external_only:
-            # O modelo externo padrão já é o barato e rápido do catálogo, que
-            # é justamente o que os papéis locais pedem.
-            return ai.external_heavy_model if role == "heavy" else ai.external_model
+            # Sem modelo local, cada papel vira um modelo externo diferente: o
+            # pequeno para classificar e frasear, que roda a cada mensagem; o
+            # médio para responder; o grande só para tarefa difícil.
+            return {
+                "local": ai.external_fast_model,
+                "fast": ai.external_fast_model,
+                "external": ai.external_model,
+                "heavy": ai.external_heavy_model,
+            }[role]
         return {
             "local": ai.local_model,
             "fast": ai.local_fast_model,
